@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+
+database/bingo_faune.db
+
+static/images/*
+!static/images/.gitkeep
