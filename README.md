@@ -23,7 +23,7 @@ Chaque joueur dispose de son propre carnet de bord avec une liste d'animaux. Les
 
 ## FUTUR UPDATE
 
-1. Pouvoir appuyer sur les images
+1. Données plus d'informations sur les especes
 2. Avoir une meilleur classification des especes 
 3. Avoir des missions quotidiennes pour marquer des points supplémentaires
 4. Rajouter un système d'ami
