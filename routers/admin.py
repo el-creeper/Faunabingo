@@ -1,12 +1,34 @@
-import sqlite3
-import uuid
 import os
+import secrets
+import uuid
 import shutil
-from fastapi import APIRouter, Form, UploadFile, File
+import sqlite3
+from fastapi import APIRouter, Form, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
-router = APIRouter(prefix="/admin", tags=["Administration"])
+# Assure-toi que le nom correspond bien à ton fichier de BDD
 DB_NAME = "database/bingo_faune.db"
+
+router = APIRouter(tags=["Administration"])
+security = HTTPBasic()
+
+def verifier_admin(credentials: HTTPBasicCredentials = Depends(security)):
+    """Vérifie les identifiants tapés dans la pop-up avec ceux du fichier .env"""
+    user_attendu = os.getenv("ADMIN_USER", "admin")
+    mdp_attendu = os.getenv("ADMIN_PASSWORD", "secret")
+    
+    # compare_digest empêche les attaques temporelles (timing attacks)
+    is_user_ok = secrets.compare_digest(credentials.username, user_attendu)
+    is_pass_ok = secrets.compare_digest(credentials.password, mdp_attendu)
+    
+    if not (is_user_ok and is_pass_ok):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Accès interdit",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return True
 
 def layout_html(titre: str, contenu: str) -> str:
     return f"""
@@ -16,7 +38,7 @@ def layout_html(titre: str, contenu: str) -> str:
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{titre}</title>
-        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+        <script src="https://cdn.tailwindcss.com"></script>
     </head>
     <body class="bg-slate-50 text-slate-800 font-sans min-h-screen pb-12">
         <nav class="bg-emerald-600 text-white shadow-md mb-6">
@@ -32,7 +54,8 @@ def layout_html(titre: str, contenu: str) -> str:
     </html>
     """
 
-@router.get("/", response_class=HTMLResponse)
+# 🔒 SÉCURISÉ : L'accès à la page est protégé
+@router.get("/admin", response_class=HTMLResponse, dependencies=[Depends(verifier_admin)])
 def admin_liste():
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
@@ -97,7 +120,8 @@ def admin_liste():
     """
     return layout_html("Gestion des Espèces", contenu)
 
-@router.post("/ajouter")
+# 🔒 SÉCURISÉ : L'action d'ajout est protégée
+@router.post("/admin/ajouter", dependencies=[Depends(verifier_admin)])
 def admin_ajouter(
     nom_courant: str = Form(...), nom_scientifique: str = Form(None),
     classe: str = Form(None), famille: str = Form(None),
@@ -106,8 +130,16 @@ def admin_ajouter(
 ):
     chemin_image_db = None
     if image_reference and image_reference.filename:
-        nom_fichier = f"{uuid.uuid4()}_{image_reference.filename.replace(' ', '_')}"
+        # SÉCURITÉ FICHIER : On extrait juste l'extension (.jpg, .png) et on ignore le vrai nom
+        extension = os.path.splitext(image_reference.filename)[1].lower()
+        if extension not in ['.jpg', '.jpeg', '.png', '.webp']:
+            extension = '.jpg' # Fallback de sécurité
+            
+        nom_fichier = f"{uuid.uuid4()}{extension}"
         chemin_physique = f"static/images/{nom_fichier}"
+        
+        # Assurer que le dossier existe
+        os.makedirs("static/images", exist_ok=True)
         
         with open(chemin_physique, "wb") as buffer:
             shutil.copyfileobj(image_reference.file, buffer)
@@ -124,7 +156,8 @@ def admin_ajouter(
         conn.commit()
     return RedirectResponse(url="/admin", status_code=303)
 
-@router.get("/modifier/{id_espece}", response_class=HTMLResponse)
+# 🔒 SÉCURISÉ : Le formulaire de modification est protégé
+@router.get("/admin/modifier/{id_espece}", response_class=HTMLResponse, dependencies=[Depends(verifier_admin)])
 def admin_form_modifier(id_espece: str):
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
@@ -166,7 +199,8 @@ def admin_form_modifier(id_espece: str):
     """
     return layout_html("Modifier une espèce", contenu)
 
-@router.post("/modifier/{id_espece}")
+# 🔒 SÉCURISÉ : L'action de modification est protégée
+@router.post("/admin/modifier/{id_espece}", dependencies=[Depends(verifier_admin)])
 def admin_modifier(
     id_espece: str,
     nom_courant: str = Form(...), nom_scientifique: str = Form(None),
@@ -177,8 +211,16 @@ def admin_modifier(
         cursor = conn.cursor()
         
         if image_reference and image_reference.filename:
-            nom_fichier = f"{uuid.uuid4()}_{image_reference.filename.replace(' ', '_')}"
+            # SÉCURITÉ FICHIER : Même protection contre le Path Traversal
+            extension = os.path.splitext(image_reference.filename)[1].lower()
+            if extension not in ['.jpg', '.jpeg', '.png', '.webp']:
+                extension = '.jpg'
+                
+            nom_fichier = f"{uuid.uuid4()}{extension}"
             chemin_physique = f"static/images/{nom_fichier}"
+            
+            os.makedirs("static/images", exist_ok=True)
+            
             with open(chemin_physique, "wb") as buffer:
                 shutil.copyfileobj(image_reference.file, buffer)
             

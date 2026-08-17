@@ -1,10 +1,11 @@
 import sqlite3
 import uuid
-from fastapi import APIRouter, Form, BackgroundTasks
+from fastapi import APIRouter, Form, BackgroundTasks, Response, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from securite import hacher_email, hacher_mot_de_passe
-from emails import envoyer_email_bienvenue, envoyer_email_compte_existant
-
+from securite import (hacher_email, hacher_mot_de_passe, verifier_mot_de_passe, 
+                      generer_token_inscription, lire_token_inscription, 
+                      generer_token_mdp, lire_token_mdp)
+from emails import envoyer_email_bienvenue, envoyer_email_compte_existant, envoyer_email_reinitialisation
 
 
 router = APIRouter(tags=["Authentification"])
@@ -67,9 +68,10 @@ def page_inscription():
     """
     return layout_auth("Créer un compte", contenu)
 
-@router.post("/inscription")
+
 @router.post("/inscription")
 def traiter_inscription(
+    request: Request,
     background_tasks: BackgroundTasks,
     prenom: str = Form(...), 
     email: str = Form(...), 
@@ -81,24 +83,269 @@ def traiter_inscription(
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
         
-        # 1. On vérifie si l'email existe déjà
+        # 1. On vérifie juste si le compte existe déjà
         cursor.execute("SELECT id_participant FROM Participant WHERE email_hash = ?", (email_hash,))
         if cursor.fetchone():
-            # ANTI-ÉNUMÉRATION : On envoie l'email d'avertissement au lieu d'afficher une erreur
             background_tasks.add_task(envoyer_email_compte_existant, email)
+            return RedirectResponse(url="/inscription/succes", status_code=303)
             
-            # On fait croire à l'utilisateur que tout s'est bien passé pour ne donner aucun indice
-            return RedirectResponse(url="/connexion", status_code=303)
+    # 2. AUCUNE MODIFICATION DE LA BASE DE DONNÉES ICI !
+    # On génère un jeton qui contient toutes les informations en transit
+    token = generer_token_inscription(prenom, email, mdp_hash)
+    lien_verification = f"{request.base_url}verification-email?token={token}"
+    
+    background_tasks.add_task(envoyer_email_bienvenue, email, prenom, lien_verification)
+        
+    return RedirectResponse(url="/inscription/succes", status_code=303)
+
+
+@router.get("/verification-email", response_class=HTMLResponse)
+def verifier_email(token: str):
+    # 1. On déchiffre le jeton pour récupérer les données en transit
+    donnees = lire_token_inscription(token)
+    
+    if not donnees:
+        erreur = """
+        <div class="text-center">
+            <div class="text-red-500 text-4xl mb-2">❌</div>
+            <h3 class="text-lg font-bold">Lien expiré ou invalide</h3>
+            <p class="text-sm text-stone-600 mb-6">Demande un nouveau lien de vérification.</p>
+        </div>
+        """
+        return HTMLResponse(layout_auth("Erreur", erreur), status_code=400)
+        
+    # 2. On extrait les données du jeton valide
+    prenom = donnees["prenom"]
+    email_clair = donnees["email"]
+    mdp_hash = donnees["mdp_hash"]
+    
+    email_hash = hacher_email(email_clair)
+    
+    # 3. On fait enfin l'insertion officielle dans la base de données
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        
+        # On s'assure que l'utilisateur n'a pas cliqué deux fois sur le lien
+        cursor.execute("SELECT id_participant FROM Participant WHERE email_hash = ?", (email_hash,))
+        if not cursor.fetchone():
+            id_participant = str(uuid.uuid4())
+            cursor.execute("""
+                INSERT INTO Participant (id_participant, prenom, email_hash, mot_de_passe_hash, score_total)
+                VALUES (?, ?, ?, ?, 0)
+            """, (id_participant, prenom, email_hash, mdp_hash))
+            conn.commit()
+        
+    succes = """
+    <div class="text-center">
+        <div class="text-emerald-500 text-6xl mb-4">✅</div>
+        <h3 class="text-2xl font-black text-stone-800 mb-3">E-mail validé !</h3>
+        <p class="text-sm text-stone-600 mb-6">Ton compte a été créé avec succès.</p>
+        <a href="/connexion" class="w-full flex justify-center py-3 px-4 rounded-xl shadow-sm font-bold text-white bg-lime-700 hover:bg-lime-800 transition">Se connecter</a>
+    </div>
+    """
+    return layout_auth("Compte activé", succes)
+
+
+
+@router.get("/inscription/succes", response_class=HTMLResponse)
+def page_succes_inscription():
+    contenu = """
+    <div class="text-center py-4">
+        <div class="text-6xl mb-4">✨</div>
+        <h3 class="text-2xl font-black text-stone-800 mb-3">Inscription en cours !</h3>
+        <p class="text-sm text-stone-600 mb-8 leading-relaxed">
+            Un e-mail de confirmation vient de t'être envoyé.<br>
+            Clique sur le lien à l'intérieur pour activer ton compte !
+        </p>
+        <a href="/connexion" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-lime-700 hover:bg-lime-800 active:scale-95 transition">
+            Aller à la connexion
+        </a>
+    </div>
+    """
+    return layout_auth("Vérifie tes e-mails", contenu)
+
+
+# --- PAGE DE CONNEXION ---
+
+@router.get("/connexion", response_class=HTMLResponse)
+def page_connexion():
+    contenu = """
+    <form action="/connexion" method="POST" class="space-y-5">
+        <div>
+            <label for="email" class="block text-sm font-bold text-stone-700 mb-1">Adresse e-mail</label>
+            <input id="email" name="email" type="email" required class="w-full px-4 py-3 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-lime-500 bg-stone-50">
+        </div>
+        
+        <div>
+            <div class="flex justify-between items-center mb-1">
+                <label for="mot_de_passe" class="block text-sm font-bold text-stone-700">Mot de passe</label>
+                <a href="/mot-de-passe-oublie" class="text-[11px] font-bold text-lime-700 hover:underline">Oublié ?</a>
+            </div>
+            <input id="mot_de_passe" name="mot_de_passe" type="password" required class="w-full px-4 py-3 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-lime-500 bg-stone-50">
+        </div>
+        
+        <div class="pt-2">
+            <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-lime-700 hover:bg-lime-800 active:scale-95 transition">
+                Se connecter
+            </button>
+        </div>
+    </form>
+    
+    <div class="mt-6 text-center border-t border-stone-100 pt-5">
+        <p class="text-sm text-stone-600">Pas encore de compte ? <a href="/inscription" class="font-bold text-lime-700 hover:underline">S'inscrire</a></p>
+    </div>
+    """
+    return layout_auth("Connexion", contenu)
+
+@router.post("/connexion")
+def traiter_connexion(email: str = Form(...), mot_de_passe: str = Form(...)):
+    # 1. On recrée le hachage de l'email pour chercher l'utilisateur
+    email_hash = hacher_email(email)
+    
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT id_participant, mot_de_passe_hash FROM Participant WHERE email_hash = ?", (email_hash,))
+        utilisateur = cursor.fetchone()
+        
+        # 2. Vérification de sécurité (Anti-énumération et Mot de passe)
+        # On utilise "not utilisateur" pour voir si le compte n'existe pas, 
+        # OU la fonction bcrypt pour voir si le mot de passe est faux.
+        if not utilisateur or not verifier_mot_de_passe(mot_de_passe, utilisateur['mot_de_passe_hash']):
+            erreur_html = """
+            <div class="text-center">
+                <div class="text-red-500 text-4xl mb-2">❌</div>
+                <h3 class="text-lg font-bold text-stone-800 mb-2">Identifiants incorrects</h3>
+                <p class="text-sm text-stone-600 mb-6">L'adresse e-mail ou le mot de passe est invalide.</p>
+                <a href="/connexion" class="w-full block py-3 px-4 bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold rounded-xl transition">Réessayer</a>
+            </div>
+            """
+            # On renvoie la même erreur générique pour les deux cas
+            return HTMLResponse(layout_auth("Erreur", erreur_html), status_code=400)
             
-        # 2. Si le compte n'existe pas, on le crée normalement
-        id_participant = str(uuid.uuid4())
-        cursor.execute("""
-            INSERT INTO Participant (id_participant, prenom, email_hash, mot_de_passe_hash, score_total)
-            VALUES (?, ?, ?, ?, 0)
-        """, (id_participant, prenom, email_hash, mdp_hash))
+        # 3. Succès de la connexion !
+        id_participant = utilisateur['id_participant']
+        
+        # On prépare la redirection vers le carnet de l'utilisateur
+        response = RedirectResponse(url=f"/carnet/{id_participant}", status_code=303)
+        
+        # 4. Le Cookie de Session ultra-sécurisé
+        response.set_cookie(
+            key="session_faunabingo", 
+            value=id_participant, 
+            httponly=True,       # Empêche le piratage par des scripts (XSS)
+            max_age=31536000     # Garde l'utilisateur connecté pendant 1 an (en secondes)
+        )
+        
+        return response
+    
+    # --- DÉCONNEXION ---
+@router.get("/deconnexion")
+def se_deconnecter():
+    # On redirige vers l'accueil
+    response = RedirectResponse(url="/", status_code=303)
+    # On détruit le cookie de session !
+    response.delete_cookie(key="session_faunabingo")
+    return response 
+
+# --- MOT DE PASSE OUBLIÉ ---
+
+@router.get("/mot-de-passe-oublie", response_class=HTMLResponse)
+def page_demande_reset():
+    contenu = """
+    <div class="text-center mb-6">
+        <div class="text-4xl mb-2">🔑</div>
+        <h3 class="text-xl font-bold text-stone-800">Mot de passe oublié</h3>
+        <p class="text-sm text-stone-600 mt-2">Saisis ton adresse e-mail pour recevoir un lien de réinitialisation.</p>
+    </div>
+    <form action="/mot-de-passe-oublie" method="POST" class="space-y-4">
+        <div>
+            <input id="email" name="email" type="email" placeholder="Ton adresse e-mail" required class="w-full px-4 py-3 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-lime-500 bg-stone-50 text-center">
+        </div>
+        <button type="submit" class="w-full flex justify-center py-3 px-4 rounded-xl shadow-sm font-bold text-white bg-lime-700 hover:bg-lime-800 transition">
+            Envoyer le lien
+        </button>
+    </form>
+    <div class="mt-4 text-center">
+        <a href="/connexion" class="text-sm font-bold text-stone-500 hover:text-stone-700">Retour à la connexion</a>
+    </div>
+    """
+    return layout_auth("Mot de passe oublié", contenu)
+
+@router.post("/mot-de-passe-oublie")
+def traiter_demande_reset(request: Request, background_tasks: BackgroundTasks, email: str = Form(...)):
+    email_hash = hacher_email(email)
+    
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id_participant FROM Participant WHERE email_hash = ?", (email_hash,))
+        
+        # Si le compte existe, on génère le jeton et on envoie l'e-mail
+        if cursor.fetchone():
+            token = generer_token_mdp(email)
+            lien_reset = f"{request.base_url}reinitialiser-mot-de-passe?token={token}"
+            background_tasks.add_task(envoyer_email_reinitialisation, email, lien_reset)
+            
+    succes = """
+    <div class="text-center py-4">
+        <div class="text-5xl mb-4">✉️</div>
+        <h3 class="text-xl font-bold text-stone-800 mb-3">Vérifie tes e-mails</h3>
+        <p class="text-sm text-stone-600 mb-6 leading-relaxed">
+            Si un compte est associé à cette adresse, un lien de réinitialisation vient d'être envoyé.
+        </p>
+        <a href="/connexion" class="w-full block py-3 px-4 bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold rounded-xl transition">Retour</a>
+    </div>
+    """
+    return HTMLResponse(content=layout_auth("Email envoyé", succes))
+
+
+@router.post("/reinitialiser-mot-de-passe")
+def traiter_nouveau_mdp(token: str = Form(...), nouveau_mdp: str = Form(...)):
+    # On revérifie le token au cas où (sécurité)
+    email_clair = lire_token_mdp(token)
+    if not email_clair:
+        return RedirectResponse(url="/mot-de-passe-oublie", status_code=303)
+        
+    email_hash = hacher_email(email_clair)
+    mdp_hash = hacher_mot_de_passe(nouveau_mdp)
+    
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE Participant SET mot_de_passe_hash = ? WHERE email_hash = ?", (mdp_hash, email_hash))
         conn.commit()
         
-    # Lancement de l'email de bienvenue en arrière-plan
-    background_tasks.add_task(envoyer_email_bienvenue, email, prenom)
+    succes = """
+    <div class="text-center">
+        <div class="text-emerald-500 text-6xl mb-4">✅</div>
+        <h3 class="text-2xl font-black text-stone-800 mb-3">Mot de passe modifié !</h3>
+        <p class="text-sm text-stone-600 mb-6">Tu peux maintenant te connecter avec ton nouveau mot de passe.</p>
+        <a href="/connexion" class="w-full flex justify-center py-3 px-4 rounded-xl shadow-sm font-bold text-white bg-lime-700 hover:bg-lime-800 transition">Se connecter</a>
+    </div>
+    """
+    return HTMLResponse(content=layout_auth("Succès", succes))
+
+@router.post("/reinitialiser-mot-de-passe")
+def traiter_nouveau_mdp(token: str = Form(...), nouveau_mdp: str = Form(...)):
+    # On revérifie le token au cas où (sécurité)
+    email_clair = lire_token_mdp(token)
+    if not email_clair:
+        return RedirectResponse(url="/mot-de-passe-oublie", status_code=303)
         
-    return RedirectResponse(url="/connexion", status_code=303)
+    email_hash = hacher_email(email_clair)
+    mdp_hash = hacher_mot_de_passe(nouveau_mdp)
+    
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE Participant SET mot_de_passe_hash = ? WHERE email_hash = ?", (mdp_hash, email_hash))
+        conn.commit()
+        
+    succes = """
+    <div class="text-center">
+        <div class="text-emerald-500 text-6xl mb-4">✅</div>
+        <h3 class="text-2xl font-black text-stone-800 mb-3">Mot de passe modifié !</h3>
+        <p class="text-sm text-stone-600 mb-6">Tu peux maintenant te connecter avec ton nouveau mot de passe.</p>
+        <a href="/connexion" class="w-full flex justify-center py-3 px-4 rounded-xl shadow-sm font-bold text-white bg-lime-700 hover:bg-lime-800 transition">Se connecter</a>
+    </div>
+    """
+    return layout_auth("Succès", succes)

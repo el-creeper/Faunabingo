@@ -30,31 +30,54 @@ def layout_jeu(titre: str, contenu: str, header_links: str = "") -> str:
     </html>
     """
 
-# --- PAGE 1 : CHOIX DU JOUEUR ---
+# --- PAGE 1 : ACCUEIL PUBLIC ---
 @router.get("/", response_class=HTMLResponse)
-def page_accueil():
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Participant ORDER BY prenom")
-        participants = cursor.fetchall()
-    
-    boutons = "".join([f'<a href="/carnet/{p["id_participant"]}" class="block w-full bg-white p-5 rounded-2xl shadow-sm border border-stone-200 mb-4 hover:bg-lime-50 hover:border-lime-400 transition active:scale-95 text-center"><span class="text-xl font-bold text-stone-700">{p["prenom"]}</span></a>' for p in participants])
+def page_accueil(request: Request):
+    # 1. Redirection automatique si l'utilisateur est déjà connecté
+    session_id = request.cookies.get("session_faunabingo")
+    if session_id:
+        with sqlite3.connect(DB_NAME) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id_participant FROM Participant WHERE id_participant = ?", (session_id,))
+            if cursor.fetchone():
+                return RedirectResponse(url=f"/carnet/{session_id}", status_code=303)
 
-    contenu = f"""
-    <div class="text-center mb-8 mt-4">
-        <h2 class="text-3xl font-black text-stone-800 mb-2 tracking-tight">L'Expédition</h2>
-        <p class="text-stone-500 text-sm">Sélectionne ton profil pour accéder à ton carnet.</p>
+    # 2. Page d'accueil pour les visiteurs déconnectés
+    contenu = """
+    <div class="text-center mb-10 mt-8">
+        <div class="text-6xl mb-4">🌿</div>
+        <h2 class="text-4xl font-black text-stone-800 mb-4 tracking-tight">FaunaBingo</h2>
+        <p class="text-stone-500 text-base leading-relaxed px-4">
+            Découvre la nature, identifie les espèces et participe à la plus grande aventure d'observation !
+        </p>
     </div>
-    <div class="space-y-2">{boutons if boutons else '<p class="text-center text-stone-400">Aucun participant.</p>'}</div>
-    <div class="mt-8"><a href="/classement" class="block w-full bg-amber-500 hover:bg-amber-600 text-white p-4 rounded-xl shadow-sm font-bold text-center transition active:scale-95 text-lg">🏆 Voir le Classement</a></div>
-    <div class="mt-16 text-center"><a href="/admin" class="text-xs text-stone-400 underline hover:text-stone-600 transition">⚙️ Panel d'administration</a></div>
+    
+    <div class="space-y-4 mt-8">
+        <a href="/inscription" class="block w-full bg-lime-700 hover:bg-lime-800 text-white p-4 rounded-xl shadow-sm font-bold text-center transition active:scale-95 text-lg">
+            Créer un compte
+        </a>
+        <a href="/connexion" class="block w-full bg-white hover:bg-stone-50 text-stone-700 border border-stone-200 p-4 rounded-xl shadow-sm font-bold text-center transition active:scale-95 text-lg">
+            Se connecter
+        </a>
+    </div>
+    
+    <div class="mt-8">
+        <a href="/classement" class="block w-full bg-amber-500 hover:bg-amber-600 text-white p-4 rounded-xl shadow-sm font-bold text-center transition active:scale-95 text-lg">
+            🏆 Voir le Classement Global
+        </a>
+    </div>
     """
-    return layout_jeu("Accueil", contenu)
+    
+    return layout_jeu("Accueil - FaunaBingo", contenu)
 
 # --- PAGE 2 : LE CARNET DE BORD ---
 @router.get("/carnet/{id_participant}", response_class=HTMLResponse)
-def carnet_bord(id_participant: str):
+def carnet_bord(request: Request, id_participant: str):  
+    
+    session_id = request.cookies.get("session_faunabingo")
+    if session_id != id_participant:
+        return RedirectResponse(url="/connexion", status_code=303)
+        
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -162,7 +185,15 @@ def carnet_bord(id_participant: str):
     }});
     </script>
     """
-    return layout_jeu(f"Carnet - {joueur['prenom']}", contenu, '<a href="/classement" class="text-xs bg-lime-800 hover:bg-lime-900 px-3 py-1.5 rounded-lg transition font-medium shadow-sm">🏆 Classement</a>')
+    header_links = """
+    <div class="flex space-x-2 items-center">
+        <a href="/classement" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">🏆 Classement</a>
+        <a href="/deconnexion" class="text-[10px] sm:text-xs bg-stone-700 hover:bg-red-700 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">👋 Quitter</a>
+    </div>
+    """
+    
+    return layout_jeu(f"Carnet - {joueur['prenom']}", contenu, header_links)
+
 
 # --- ACTIONS : OBSERVER ET ANNULER ---
 @router.post("/carnet/{id_participant}/observer")
