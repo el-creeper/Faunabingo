@@ -30,6 +30,8 @@ def initialiser_bdd():
         CREATE TABLE IF NOT EXISTS Participant (
             id_participant TEXT PRIMARY KEY,
             prenom TEXT NOT NULL,
+            email_hash TEXT UNIQUE,
+            mot_de_passe_hash TEXT,
             score_total INTEGER DEFAULT 0
         );
 

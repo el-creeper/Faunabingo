@@ -1,3 +1,5 @@
 fastapi
 uvicorn
 python-multipart
+passlib[bcrypt]==1.7.4
+python-dotenv==1.0.1
