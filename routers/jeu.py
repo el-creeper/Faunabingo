@@ -6,24 +6,25 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 router = APIRouter(tags=["Jeu"])
 DB_NAME = "database/bingo_faune.db"
 
-def layout_jeu(titre: str, contenu: str, header_links: str = "") -> str:
+def layout_jeu(titre: str, contenu: str, header_links: str = ""):
     return f"""
     <!DOCTYPE html>
     <html lang="fr">
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{titre}</title>
         <script src="https://cdn.tailwindcss.com"></script>
     </head>
-    <body class="bg-stone-100 text-stone-800 font-sans min-h-screen pb-16">
-        <nav class="bg-lime-700 text-white shadow-md sticky top-0 z-50">
-            <div class="max-w-md mx-auto px-4 py-3 flex justify-between items-center">
-                <a href="/" class="text-xl font-bold tracking-wide">🌿 FaunaBingo</a>
+    <body class="bg-slate-50 text-slate-800 font-sans min-h-screen pb-20">
+        <nav class="bg-lime-700 text-white shadow-md mb-6">
+            <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+                <h1 class="text-xl font-bold tracking-tight">🌿 FaunaBingo</h1>
                 {header_links}
             </div>
         </nav>
-        <main class="max-w-md mx-auto px-4 py-6">
+        <!-- CORRECTION ICI : max-w-5xl permet d'élargir sur PC ! -->
+        <main class="max-w-5xl mx-auto px-4 md:px-8">
             {contenu}
         </main>
     </body>
@@ -71,9 +72,9 @@ def page_accueil(request: Request):
     return layout_jeu("Accueil - FaunaBingo", contenu)
 
 # --- PAGE 2 : LE CARNET DE BORD ---
+
 @router.get("/carnet/{id_participant}", response_class=HTMLResponse)
-def carnet_bord(request: Request, id_participant: str):  
-    
+def carnet_bord(request: Request, id_participant: str):
     session_id = request.cookies.get("session_faunabingo")
     if session_id != id_participant:
         return RedirectResponse(url="/connexion", status_code=303)
@@ -82,109 +83,277 @@ def carnet_bord(request: Request, id_participant: str):
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        cursor.execute("SELECT prenom FROM Participant WHERE id_participant = ?", (id_participant,))
+        cursor.execute("SELECT * FROM Participant WHERE id_participant = ?", (id_participant,))
         joueur = cursor.fetchone()
-        if not joueur: return RedirectResponse(url="/")
-            
-        cursor.execute("""
-            SELECT e.*, o.type_preuve, o.id_observation 
-            FROM Espece e LEFT JOIN Observation o ON e.id_espece = o.id_espece AND o.id_participant = ?
-            ORDER BY e.classe, e.nom_courant
-        """, (id_participant,))
-        especes = cursor.fetchall()
-
-    groupes = {}
-    for esp in especes:
-        classe = esp['classe'] or 'Autres'
-        if classe not in groupes: groupes[classe] = []
-        groupes[classe].append(esp)
-
-    html_groupes = ""
-    for classe, liste_especes in groupes.items():
-        html_groupes += f'<h3 class="text-lg font-bold text-stone-700 mt-6 mb-3 border-b-2 border-lime-200 pb-1 categorie-titre">{classe}</h3><div class="space-y-3">'
         
-        for esp in liste_especes:
-            img_html = f'<img src="/{esp["image_reference"]}" class="w-20 h-20 object-cover rounded-lg shadow-sm">' if esp['image_reference'] else '<div class="w-20 h-20 bg-stone-200 rounded-lg flex items-center justify-center text-[10px] text-stone-400">Pas photo</div>'
+        cursor.execute("SELECT * FROM Espece ORDER BY classe, nom_courant")
+        toutes_especes = cursor.fetchall()
+        
+        # On récupère les ID ET le type de preuve des espèces trouvées (sous forme de dictionnaire)
+        cursor.execute("SELECT id_espece, type_preuve FROM Observation WHERE id_participant = ?", (id_participant,))
+        especes_trouvees = {row['id_espece']: row['type_preuve'] for row in cursor.fetchall()}
+        
+    categories = {}
+    for esp in toutes_especes:
+        nom_cat = esp['classe'] if esp['classe'] else "Non classé"
+        if nom_cat not in categories:
+            categories[nom_cat] = {'total': 0, 'trouvees': 0, 'html_especes': ""}
             
-            # --- LOGIQUE D'AFFICHAGE A 3 ETAPES ---
-            actions_html = ""
-            btn_entendu = f'<form action="/carnet/{id_participant}/observer" method="POST" class="flex-1"><input type="hidden" name="id_espece" value="{esp["id_espece"]}"><input type="hidden" name="type_preuve" value="ENTENDU"><button type="submit" class="w-full bg-indigo-500 text-white text-[10px] font-bold py-1.5 rounded-lg shadow-sm active:scale-95 transition">🎧 ({esp["points_entendu"]})</button></form>' if esp['points_entendu'] > 0 else ''
-            btn_vu = f'<form action="/carnet/{id_participant}/observer" method="POST" class="flex-1"><input type="hidden" name="id_espece" value="{esp["id_espece"]}"><input type="hidden" name="type_preuve" value="VU"><button type="submit" class="w-full bg-amber-500 text-white text-[10px] font-bold py-1.5 rounded-lg shadow-sm active:scale-95 transition">👀 ({esp["points_vu"]})</button></form>'
-            btn_photo = f'<form action="/carnet/{id_participant}/observer" method="POST" class="flex-1"><input type="hidden" name="id_espece" value="{esp["id_espece"]}"><input type="hidden" name="type_preuve" value="PHOTO"><button type="submit" class="w-full bg-emerald-600 text-white text-[10px] font-bold py-1.5 rounded-lg shadow-sm active:scale-95 transition">📸 ({esp["points_photo"]})</button></form>'
-            btn_annuler = f'<form action="/carnet/{id_participant}/annuler" method="POST" class="flex-none"><input type="hidden" name="id_espece" value="{esp["id_espece"]}"><button type="submit" class="text-stone-400 hover:text-red-500 px-2 py-1" title="Annuler">❌</button></form>'
+        categories[nom_cat]['total'] += 1
+        est_trouvee = esp['id_espece'] in especes_trouvees
+        
+        # --- C'EST CETTE PARTIE QUI TE MANQUAIT ---
+        type_preuve_actuel = ""
+        if est_trouvee:
+            categories[nom_cat]['trouvees'] += 1
+            type_preuve_actuel = especes_trouvees[esp['id_espece']]
+        # ------------------------------------------
+            
+        # On définit le badge selon le statut
+        badge = f"✅ {type_preuve_actuel}" if est_trouvee else "" 
+        img_src = f"/{esp['image_reference']}" if esp['image_reference'] else "/static/placeholder.png"
+        
+        # --- LA LOGIQUE DES BOUTONS DYNAMIQUES ET COULEURS PLEINES ---
+        html_actions = '<div class="mt-3 flex gap-1 sm:gap-2">'
+        
+        # S'il n'a pas encore fait de photo, on affiche le formulaire pour s'améliorer
+        if type_preuve_actuel != "PHOTO":
+            html_actions += f'''<form action="/carnet/{id_participant}/observer" method="POST" class="flex flex-1 gap-1 sm:gap-2">
+                <input type="hidden" name="id_espece" value="{esp['id_espece']}">'''
+                
+            # CORRECTION ICI : Le bouton ENTENDU n'apparaît que s'il rapporte plus de 0 point !
+            if not type_preuve_actuel and esp["points_entendu"] > 0:
+                html_actions += f'<button type="submit" name="type_preuve" value="ENTENDU" class="flex-1 text-[10px] font-bold bg-indigo-600 text-white py-1.5 rounded shadow-sm hover:bg-indigo-700 transition">🔊 {esp["points_entendu"]}</button>'
+                
+            # Bouton VU (visible au début ou si on a juste entendu)
+            if type_preuve_actuel in ["", "ENTENDU"]:
+                html_actions += f'<button type="submit" name="type_preuve" value="VU" class="flex-1 text-[10px] font-bold bg-amber-500 text-white py-1.5 rounded shadow-sm hover:bg-amber-600 transition">👀 {esp["points_vu"]}</button>'
+                
+            # Bouton PHOTO (Toujours visible tant qu'on n'a pas coché photo)
+            html_actions += f'<button type="submit" name="type_preuve" value="PHOTO" class="flex-1 text-[10px] font-bold bg-emerald-600 text-white py-1.5 rounded shadow-sm hover:bg-emerald-700 transition">📸 {esp["points_photo"]}</button>'
+            html_actions += '</form>'
+            
+        # Bouton ANNULER (visible dès qu'une preuve existe)
+        if type_preuve_actuel:
+            # Si on a la photo, le bouton annuler prend toute la largeur. Sinon, c'est juste une petite croix à côté.
+            btn_texte = "❌ Annuler" if type_preuve_actuel == "PHOTO" else "❌"
+            flex_class = "flex-1" if type_preuve_actuel == "PHOTO" else "shrink-0"
+            html_actions += f'''<form action="/carnet/{id_participant}/annuler" method="POST" class="flex {flex_class}">
+                <input type="hidden" name="id_espece" value="{esp['id_espece']}">
+                <button type="submit" class="w-full px-3 text-[10px] font-bold bg-red-600 text-white py-1.5 rounded shadow-sm hover:bg-red-700 transition">{btn_texte}</button>
+            </form>'''
+            
+        html_actions += '</div>'
+        # -------------------------------------------------------------
+            
+        carte = f"""
+        <div id="espece-{esp['id_espece']}" class="carte-espece scroll-mt-40 bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden transition-all duration-300">
+            <div class="carte-img-container shrink-0 bg-stone-100 relative">
+                <img src="{img_src}" class="carte-img w-full h-full object-cover">
+            </div>
+            <div class="p-3 flex-1 flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-start mb-1">
+                        <h4 class="font-bold text-stone-800 text-sm leading-tight">{esp['nom_courant']}</h4>
+                        <span class="text-[10px] font-black text-emerald-700 bg-emerald-50 px-1 rounded">{badge}</span>
+                    </div>
+                    <p class="text-[10px] text-stone-500 italic">{esp['nom_scientifique'] or ''}</p>
+                </div>
+                
+                {html_actions}
+                
+            </div>
+        </div>
+        """
+        categories[nom_cat]['html_especes'] += carte
+        
 
-            if esp['type_preuve'] == 'PHOTO':
-                actions_html = f'<div class="flex items-center justify-between mt-2"><div class="inline-block px-3 py-1 rounded-full text-[10px] font-bold border bg-emerald-100 text-emerald-800 border-emerald-300">📸 PHOTO !</div>{btn_annuler}</div>'
-            elif esp['type_preuve'] == 'VU':
-                pts_diff = esp['points_photo'] - esp['points_vu']
-                actions_html = f'<div class="flex items-center space-x-1 mt-2"><div class="inline-block px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-amber-100 text-amber-800 border-amber-300 shadow-sm">👀 VU !</div><form action="/carnet/{id_participant}/observer" method="POST" class="flex-1"><input type="hidden" name="id_espece" value="{esp["id_espece"]}"><input type="hidden" name="type_preuve" value="PHOTO"><button type="submit" class="w-full bg-emerald-600 text-white text-[10px] font-bold py-1.5 rounded-lg shadow-sm active:scale-95 transition">📸 Photo (+{pts_diff})</button></form>{btn_annuler}</div>'
-            elif esp['type_preuve'] == 'ENTENDU':
-                pts_diff_vu = esp['points_vu'] - esp['points_entendu']
-                pts_diff_photo = esp['points_photo'] - esp['points_entendu']
-                actions_html = f'<div class="flex items-center space-x-1 mt-2"><div class="inline-block px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-indigo-100 text-indigo-800 border-indigo-300 shadow-sm">🎧 ENTENDU !</div><form action="/carnet/{id_participant}/observer" method="POST" class="flex-1"><input type="hidden" name="id_espece" value="{esp["id_espece"]}"><input type="hidden" name="type_preuve" value="VU"><button type="submit" class="w-full bg-amber-500 text-white text-[10px] font-bold py-1.5 rounded-lg shadow-sm active:scale-95 transition">👀 Vu (+{pts_diff_vu})</button></form><form action="/carnet/{id_participant}/observer" method="POST" class="flex-1"><input type="hidden" name="id_espece" value="{esp["id_espece"]}"><input type="hidden" name="type_preuve" value="PHOTO"><button type="submit" class="w-full bg-emerald-600 text-white text-[10px] font-bold py-1.5 rounded-lg shadow-sm active:scale-95 transition">📸 Ph (+{pts_diff_photo})</button></form>{btn_annuler}</div>'
-            else:
-                actions_html = f'<div class="flex space-x-1 mt-2">{btn_entendu}{btn_vu}{btn_photo}</div>'
-
-            html_groupes += f'<div id="carte-{esp["id_espece"]}" class="bg-white p-3 rounded-xl shadow-sm border border-stone-200 animal-card" data-nom="{esp["nom_courant"].lower()} {esp["nom_scientifique"].lower() if esp["nom_scientifique"] else ""}"><div class="flex space-x-3">{img_html}<div class="flex-1"><h4 class="font-bold text-stone-800 leading-tight">{esp["nom_courant"]}</h4><p class="text-[10px] italic text-stone-500 mb-1">{esp["nom_scientifique"] or ""}</p>{actions_html}</div></div></div>'
-        html_groupes += '</div>'
+    # BOUTONS FILTRES (Ajout de 'this' dans le onclick pour détecter la désélection)
+    html_boutons_filtres = """
+    <div class="flex space-x-2 overflow-x-auto pb-3 pt-2 px-1 scroll-adaptatif" id="conteneur-filtres">
+        <button onclick="filtrerCategorie('Toutes', this)" class="btn-filtre active shrink-0 px-4 py-2 rounded-full bg-lime-700 text-white font-bold text-sm shadow-sm transition">
+            Toutes
+        </button>
+    """
+    for nom_cat, stats in categories.items():
+        html_boutons_filtres += f"""
+        <button onclick="filtrerCategorie('{nom_cat}', this)" class="btn-filtre shrink-0 px-4 py-2 rounded-full bg-white border border-stone-200 text-stone-600 font-medium text-sm hover:bg-stone-50 hover:border-lime-300 transition">
+            {nom_cat} <span class="ml-1 text-[10px] bg-stone-100 px-1.5 py-0.5 rounded-md text-stone-500 font-bold">{stats['trouvees']}/{stats['total']}</span>
+        </button>
+        """
+    html_boutons_filtres += "</div>"
+    
+    html_sections_categories = ""
+    for nom_cat, stats in categories.items():
+        html_sections_categories += f"""
+        <div class="section-categorie mb-8" data-categorie="{nom_cat}">
+            <div class="flex items-center justify-between mb-4 border-b border-stone-200 pb-2">
+                <h3 class="text-lg font-black text-stone-800">{nom_cat}</h3>
+            </div>
+            <div class="grille-categories">
+                {stats['html_especes']}
+            </div>
+        </div>
+        """
 
     contenu = f"""
-    <div class="mb-5 flex justify-between items-end"><div><p class="text-sm text-stone-500">Carnet de bord</p><h2 class="text-2xl font-bold text-stone-800">{joueur['prenom']}</h2></div></div>
-    <div class="sticky top-[58px] z-40 bg-stone-100 py-2 pb-4"><input type="text" id="searchBar" onkeyup="rechercherAnimal()" placeholder="🔍 Rechercher un animal..." class="w-full px-4 py-3 rounded-xl border border-stone-300 shadow-sm focus:outline-lime-500 text-sm"></div>
-    {html_groupes}
+    <div class="flex justify-between items-end mb-4">
+        <div>
+            <h2 class="text-3xl font-black text-stone-800">Ton Carnet</h2>
+            <p class="text-stone-500 font-medium mt-1">Score : <span id="score-total" class="text-lime-700 font-bold">{joueur['score_total']} pts</span></p>
+        </div>
+        <button onclick="toggleVue()" id="btn-vue" class="px-3 py-2 bg-white border border-stone-300 shadow-sm rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition flex items-center">
+            📄 Liste
+        </button>
+    </div>
     
-    <script>
-    function rechercherAnimal() {{
-        let texte = document.getElementById('searchBar').value.toLowerCase();
+    <div class="sticky top-0 bg-slate-50 z-40 -mx-4 px-4 md:-mx-8 md:px-8 border-b border-stone-200 mb-6 shadow-[0_4px_6px_-1px_rgba(248,250,252,1)]">
+        {html_boutons_filtres}
+    </div>
+
+    <div id="liste-especes" class="mode-liste">
+        {html_sections_categories}
+    </div>
+
+    <style>
+        @media (max-width: 768px) {{
+            .scroll-adaptatif::-webkit-scrollbar {{ display: none; }}
+            .scroll-adaptatif {{ -ms-overflow-style: none; scrollbar-width: none; }}
+        }}
+        .scroll-adaptatif::-webkit-scrollbar {{ height: 6px; }}
+        .scroll-adaptatif::-webkit-scrollbar-thumb {{ background-color: #cbd5e1; border-radius: 4px; }}
+
+        .mode-liste .grille-categories {{ display: flex; flex-direction: column; gap: 0.75rem; }}
+        .mode-liste .carte-espece {{ display: flex; flex-direction: row; height: 130px; }}
+        .mode-liste .carte-img-container {{ width: 130px; height: 100%; border-right: 1px solid #e7e5e4; }}
+
+        .mode-grille .grille-categories {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; }}
+        .mode-grille .carte-espece {{ display: flex; flex-direction: column; height: 100%; }}
+        .mode-grille .carte-img-container {{ width: 100%; height: 130px; border-bottom: 1px solid #e7e5e4; }}
         
-        document.querySelectorAll('.animal-card').forEach(carte => {{
-            carte.style.display = carte.getAttribute('data-nom').includes(texte) ? 'block' : 'none';
+        @media (min-width: 1024px) {{
+            .mode-grille .grille-categories {{ grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem; }}
+            .mode-grille .carte-img-container {{ height: 160px; }}
+        }}
+    </style>
+
+    <script>
+    function filtrerCategorie(categorieChoisie, boutonClique = null) {{
+        // SI LE BOUTON ÉTAIT DÉJÀ ACTIF, ON RETOURNE SUR "TOUTES"
+        if (boutonClique && boutonClique.classList.contains('active') && categorieChoisie !== 'Toutes') {{
+            categorieChoisie = 'Toutes';
+        }}
+
+        const sections = document.querySelectorAll('.section-categorie');
+        sections.forEach(sec => {{
+            if (categorieChoisie === 'Toutes' || sec.dataset.categorie === categorieChoisie) {{
+                sec.style.display = 'block';
+            }} else {{
+                sec.style.display = 'none';
+            }}
         }});
-        document.querySelectorAll('.categorie-titre').forEach(titre => {{
-            let hasVisible = Array.from(titre.nextElementSibling.querySelectorAll('.animal-card')).some(c => c.style.display !== 'none');
-            titre.style.display = hasVisible ? 'block' : 'none';
+
+        const boutons = document.querySelectorAll('.btn-filtre');
+        boutons.forEach(btn => {{
+            btn.className = "btn-filtre shrink-0 px-4 py-2 rounded-full bg-white border border-stone-200 text-stone-600 font-medium text-sm hover:bg-stone-50 hover:border-lime-300 transition";
+            
+            if (categorieChoisie === 'Toutes' && btn.innerText.trim() === 'Toutes') {{
+                btn.className = "btn-filtre active shrink-0 px-4 py-2 rounded-full bg-lime-700 text-white font-bold text-sm shadow-sm transition";
+            }} else if (categorieChoisie !== 'Toutes' && btn.innerText.includes(categorieChoisie)) {{
+                btn.className = "btn-filtre active shrink-0 px-4 py-2 rounded-full bg-lime-700 text-white font-bold text-sm shadow-sm transition";
+            }}
         }});
     }}
 
-    // LA MAGIE AJAX : On intercepte les clics sur les formulaires
+    function toggleVue(forcerMode = null) {{
+        const conteneur = document.getElementById('liste-especes');
+        const btn = document.getElementById('btn-vue');
+        
+        const modeActuel = conteneur.classList.contains('mode-liste') ? 'liste' : 'grille';
+        const nouveauMode = forcerMode ? forcerMode : (modeActuel === 'liste' ? 'grille' : 'liste');
+
+        if (nouveauMode === 'grille') {{
+            conteneur.classList.remove('mode-liste');
+            conteneur.classList.add('mode-grille');
+            btn.innerHTML = '🔲 Grille';
+            localStorage.setItem('vue-faunabingo', 'grille');
+        }} else {{
+            conteneur.classList.remove('mode-grille');
+            conteneur.classList.add('mode-liste');
+            btn.innerHTML = '📄 Liste';
+            localStorage.setItem('vue-faunabingo', 'liste');
+        }}
+    }}
+
+    document.addEventListener("DOMContentLoaded", () => {{
+        const preference = localStorage.getItem('vue-faunabingo');
+        if (preference === 'grille') {{
+            toggleVue('grille');
+        }}
+    }});
+
+    // --- MAGIE FLUIDE : Mise à jour sans rechargement ---
     document.addEventListener('submit', async function(e) {{
-        if (e.target.tagName === 'FORM') {{
-            e.preventDefault(); // 🛑 Stoppe le rechargement brutal
+        // On vérifie que le formulaire envoyé se trouve bien dans une carte espèce
+        if (e.target.closest('.carte-espece')) {{
+            e.preventDefault(); // Bloque le rechargement brutal de la page
             
             const form = e.target;
-            const carteDiv = form.closest('.animal-card');
-            if (!carteDiv) return;
-            const idCarte = carteDiv.id;
+            const formData = new FormData(form);
             
-            carteDiv.style.opacity = '0.4';
-            carteDiv.style.pointerEvents = 'none'; 
+            // On ajoute la valeur du bouton cliqué au formulaire (Vu, Entendu, Photo)
+            const submitter = e.submitter;
+            if (submitter && submitter.name) {{
+                formData.append(submitter.name, submitter.value);
+            }}
             
-            try {{
-                const formData = new FormData(form);
-                const response = await fetch(form.action, {{
-                    method: 'POST',
-                    body: formData,
-                    redirect: 'follow'
-                }});
-                
-                const htmlText = await response.text();
+            // On envoie les données au serveur en arrière-plan
+            const response = await fetch(form.action, {{
+                method: form.method,
+                body: formData
+            }});
+            
+            if (response.ok) {{
+                // On récupère la nouvelle page web générée par le serveur
+                const texteHTML = await response.text();
                 const parser = new DOMParser();
-                const doc = parser.parseFromString(htmlText, 'text/html');
+                const nouvellePage = parser.parseFromString(texteHTML, "text/html");
                 
-                const nouvelleCarte = doc.getElementById(idCarte);
-                if (nouvelleCarte) {{
-                    carteDiv.innerHTML = nouvelleCarte.innerHTML;
+                // 1. Mettre à jour UNIQUEMENT la carte de l'animal modifié
+                const idEspece = form.querySelector('input[name="id_espece"]').value;
+                const ancienneCarte = document.getElementById('espece-' + idEspece);
+                const nouvelleCarte = nouvellePage.getElementById('espece-' + idEspece);
+                if (ancienneCarte && nouvelleCarte) {{
+                    ancienneCarte.innerHTML = nouvelleCarte.innerHTML;
+                    ancienneCarte.className = nouvelleCarte.className;
                 }}
-            }} catch (error) {{
-                console.error("Erreur de connexion :", error);
-            }} finally {{
-                carteDiv.style.opacity = '1';
-                carteDiv.style.pointerEvents = 'auto';
+                
+                // 2. Mettre à jour le score global en haut
+                const ancienScore = document.getElementById('score-total');
+                const nouveauScore = nouvellePage.getElementById('score-total');
+                if (ancienScore && nouveauScore) {{
+                    ancienScore.innerHTML = nouveauScore.innerHTML;
+                }}
+                
+                // 3. Mettre à jour les compteurs des filtres (X/Y trouvées)
+                const anciensFiltres = document.getElementById('conteneur-filtres');
+                const nouveauxFiltres = nouvellePage.getElementById('conteneur-filtres');
+                if (anciensFiltres && nouveauxFiltres) {{
+                    anciensFiltres.innerHTML = nouveauxFiltres.innerHTML;
+                }}
+                
+                // 4. Réappliquer le filtre visuel actuel pour ne rien casser
+                const filtreActif = document.querySelector('.btn-filtre.active');
+                if (filtreActif) {{
+                    const nomFiltre = filtreActif.childNodes[0].nodeValue.trim();
+                    filtrerCategorie(nomFiltre);
+                }}
             }}
         }}
     }});
     </script>
     """
+    
     header_links = """
     <div class="flex space-x-2 items-center">
         <a href="/classement" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">🏆 Classement</a>
@@ -195,9 +364,17 @@ def carnet_bord(request: Request, id_participant: str):
     return layout_jeu(f"Carnet - {joueur['prenom']}", contenu, header_links)
 
 
+
+
+
 # --- ACTIONS : OBSERVER ET ANNULER ---
 @router.post("/carnet/{id_participant}/observer")
-def enregistrer_observation(id_participant: str, id_espece: str = Form(...), type_preuve: str = Form(...)):
+def enregistrer_observation(request: Request, id_participant: str, id_espece: str = Form(...), type_preuve: str = Form(...)):
+    # Sécurité : on vérifie que l'action est bien faite par le propriétaire du carnet
+    session_id = request.cookies.get("session_faunabingo")
+    if session_id != id_participant:
+        return RedirectResponse(url="/connexion", status_code=303)
+        
     valeur_preuve = {'ENTENDU': 1, 'VU': 2, 'PHOTO': 3}
     
     with sqlite3.connect(DB_NAME) as conn:
@@ -211,6 +388,7 @@ def enregistrer_observation(id_participant: str, id_espece: str = Form(...), typ
         
         if obs_existante:
             ancien_type = obs_existante[1]
+            # On améliore l'observation seulement si la nouvelle preuve est meilleure
             if valeur_preuve[type_preuve] > valeur_preuve[ancien_type]:
                 points_supplementaires = pts[type_preuve] - pts[ancien_type]
                 cursor.execute("UPDATE Observation SET type_preuve = ? WHERE id_observation = ?", (type_preuve, obs_existante[0]))
@@ -224,7 +402,12 @@ def enregistrer_observation(id_participant: str, id_espece: str = Form(...), typ
     return RedirectResponse(url=f"/carnet/{id_participant}", status_code=303)
 
 @router.post("/carnet/{id_participant}/annuler")
-def annuler_observation(id_participant: str, id_espece: str = Form(...)):
+def annuler_observation(request: Request, id_participant: str, id_espece: str = Form(...)):
+    # Sécurité
+    session_id = request.cookies.get("session_faunabingo")
+    if session_id != id_participant:
+        return RedirectResponse(url="/connexion", status_code=303)
+        
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id_observation, type_preuve FROM Observation WHERE id_participant = ? AND id_espece = ?", (id_participant, id_espece))
