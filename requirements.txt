@@ -1,3 +1,5 @@
 fastapi
 uvicorn
 python-multipart
+bcrypt==4.1.2
+python-dotenv==1.0.1

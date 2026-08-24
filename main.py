@@ -2,12 +2,13 @@ import sqlite3
 import uuid
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from routers import admin, jeu
+from routers import auth, jeu, admin, amis
 from fastapi.responses import FileResponse
 import os
+from dotenv import load_dotenv
 
 
-
+load_dotenv()
 
 
 app = FastAPI(title="FaunaBingo")
@@ -60,5 +61,7 @@ def startup_event():
     inserer_donnees_test()
 
 # --- BRANCHEMENT DES ROUTEURS ---
+app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(jeu.router)
+app.include_router(amis.router)
