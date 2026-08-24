@@ -6,6 +6,7 @@ from securite import (hacher_email, hacher_mot_de_passe, verifier_mot_de_passe,
                       generer_token_inscription, lire_token_inscription, 
                       generer_token_mdp, lire_token_mdp)
 from emails import envoyer_email_bienvenue, envoyer_email_compte_existant, envoyer_email_reinitialisation
+from jeu import layout_jeu
 
 
 router = APIRouter(tags=["Authentification"])
@@ -300,52 +301,60 @@ def traiter_demande_reset(request: Request, background_tasks: BackgroundTasks, e
     return HTMLResponse(content=layout_auth("Email envoyé", succes))
 
 
-@router.post("/reinitialiser-mot-de-passe")
-def traiter_nouveau_mdp(token: str = Form(...), nouveau_mdp: str = Form(...)):
-    # On revérifie le token au cas où (sécurité)
-    email_clair = lire_token_mdp(token)
-    if not email_clair:
-        return RedirectResponse(url="/mot-de-passe-oublie", status_code=303)
-        
-    email_hash = hacher_email(email_clair)
-    mdp_hash = hacher_mot_de_passe(nouveau_mdp)
+@router.get("/reinitialiser-mdp", response_class=HTMLResponse)
+def page_reinitialiser_mdp(request: Request, token: str = Query(...)):
+    # 1. On déchiffre le jeton pour voir s'il est valide et récupérer l'email
+    email = lire_token_mdp(token)
     
-    with sqlite3.connect(DB_NAME) as conn:
-        cursor = conn.cursor()
-        cursor.execute("UPDATE Participant SET mot_de_passe_hash = ? WHERE email_hash = ?", (mdp_hash, email_hash))
-        conn.commit()
-        
-    succes = """
-    <div class="text-center">
-        <div class="text-emerald-500 text-6xl mb-4">✅</div>
-        <h3 class="text-2xl font-black text-stone-800 mb-3">Mot de passe modifié !</h3>
-        <p class="text-sm text-stone-600 mb-6">Tu peux maintenant te connecter avec ton nouveau mot de passe.</p>
-        <a href="/connexion" class="w-full flex justify-center py-3 px-4 rounded-xl shadow-sm font-bold text-white bg-lime-700 hover:bg-lime-800 transition">Se connecter</a>
-    </div>
-    """
-    return HTMLResponse(content=layout_auth("Succès", succes))
+    if not email:
+        # Si le jeton est expiré ou trafiqué
+        return layout_jeu("Erreur", "<div class='text-center p-10 bg-red-100 rounded-xl'>Le lien est invalide ou a expiré.</div>")
 
-@router.post("/reinitialiser-mot-de-passe")
-def traiter_nouveau_mdp(token: str = Form(...), nouveau_mdp: str = Form(...)):
-    # On revérifie le token au cas où (sécurité)
-    email_clair = lire_token_mdp(token)
-    if not email_clair:
-        return RedirectResponse(url="/mot-de-passe-oublie", status_code=303)
-        
-    email_hash = hacher_email(email_clair)
-    mdp_hash = hacher_mot_de_passe(nouveau_mdp)
-    
-    with sqlite3.connect(DB_NAME) as conn:
-        cursor = conn.cursor()
-        cursor.execute("UPDATE Participant SET mot_de_passe_hash = ? WHERE email_hash = ?", (mdp_hash, email_hash))
-        conn.commit()
-        
-    succes = """
-    <div class="text-center">
-        <div class="text-emerald-500 text-6xl mb-4">✅</div>
-        <h3 class="text-2xl font-black text-stone-800 mb-3">Mot de passe modifié !</h3>
-        <p class="text-sm text-stone-600 mb-6">Tu peux maintenant te connecter avec ton nouveau mot de passe.</p>
-        <a href="/connexion" class="w-full flex justify-center py-3 px-4 rounded-xl shadow-sm font-bold text-white bg-lime-700 hover:bg-lime-800 transition">Se connecter</a>
+    # 2. Si le jeton est bon, on affiche le formulaire
+    contenu = f"""
+    <div class="max-w-md mx-auto mt-10 bg-white p-6 rounded-xl shadow-sm border border-stone-200">
+        <h2 class="text-2xl font-black mb-4">Nouveau mot de passe</h2>
+        <form action="/reinitialiser-mdp" method="POST" class="space-y-4">
+            <!-- On renvoie le jeton caché pour que le POST sache de qui on parle -->
+            <input type="hidden" name="token" value="{token}">
+            
+            <div>
+                <label class="block text-sm font-bold text-stone-700">Nouveau mot de passe</label>
+                <input type="password" name="nouveau_mdp" required minlength="8" class="w-full px-4 py-2 border rounded-lg">
+            </div>
+            <button type="submit" class="w-full bg-lime-700 text-white font-bold py-3 rounded-lg shadow-sm">
+                Enregistrer le mot de passe
+            </button>
+        </form>
     </div>
     """
-    return layout_auth("Succès", succes)
+    
+    return layout_jeu("Nouveau mot de passe", contenu)
+
+
+@router.post("/reinitialiser-mdp", response_class=HTMLResponse)
+def traiter_nouveau_mdp(request: Request, token: str = Form(...), nouveau_mdp: str = Form(...)):
+    # 1. On revérifie le jeton (sécurité)
+    email = lire_token_mdp(token)
+    if not email:
+        return layout_jeu("Erreur", "<div class='text-center p-10 bg-red-100 rounded-xl'>Le lien a expiré.</div>")
+        
+    # 2. On hache l'email pour le chercher dans la BDD, et on hache le nouveau MDP
+    email_hache = hacher_email(email) # Assure-toi d'importer cette fonction
+    mdp_hache = hacher_mot_de_passe(nouveau_mdp)
+
+    # 3. On met à jour la base de données
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE Participant SET mot_de_passe_hash = ? WHERE email_hash = ?", (mdp_hache, email_hache))
+        conn.commit()
+
+    # 4. On redirige vers la page de connexion avec un message de succès
+    contenu = """
+    <div class="max-w-md mx-auto mt-10 text-center bg-lime-50 p-6 rounded-xl border border-lime-200">
+        <h2 class="text-2xl font-black text-lime-800 mb-4">Succès ! 🎉</h2>
+        <p class="text-lime-700 mb-6">Ton mot de passe a bien été modifié.</p>
+        <a href="/connexion" class="bg-lime-700 text-white font-bold py-2 px-6 rounded-lg inline-block">Se connecter</a>
+    </div>
+    """
+    return layout_jeu("Mot de passe modifié", contenu)
