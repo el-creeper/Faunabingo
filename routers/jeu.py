@@ -2,6 +2,8 @@ import sqlite3
 import uuid
 from fastapi import APIRouter, Form, Request, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
+import urllib.parse 
+
 
 router = APIRouter(tags=["Jeu"])
 DB_NAME = "database/bingo_faune.db"
@@ -13,6 +15,7 @@ def layout_jeu(titre: str, contenu: str, header_links: str = ""):
         <a href="/mon-carnet" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-2 rounded-lg transition font-medium shadow-sm flex items-center" title="Mon Carnet">📖<span class="hidden sm:inline ml-1">Carnet</span></a>
         <a href="/amis" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-2 rounded-lg transition font-medium shadow-sm flex items-center" title="Amis">🤝<span class="hidden sm:inline ml-1">Amis</span></a>
         <a href="/classement" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-2 rounded-lg transition font-medium shadow-sm flex items-center" title="Classement">🏆<span class="hidden sm:inline ml-1">Class.</span></a>
+        <a href="/profil" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-2 rounded-lg transition font-medium shadow-sm flex items-center" title="Profil">👤<span class="hidden sm:inline ml-1">Profil</span></a>
         <a href="/deconnexion" class="text-[10px] sm:text-xs bg-stone-700 hover:bg-red-700 px-2 sm:px-3 py-2 rounded-lg transition font-medium shadow-sm flex items-center" title="Quitter">👋<span class="hidden sm:inline ml-1">Quitter</span></a>
     </div>
     """
@@ -548,16 +551,9 @@ def page_classement(request: Request, amis: str = "0"):
     {html_liste}
     """
     
-    header_links = f"""
-    <div class="flex space-x-2 items-center">
-        <a href="/amis" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">🤝 Amis</a>
-        <a href="/carnet/{session_id}" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">📖 Mon Carnet</a>
-        <a href="/deconnexion" class="text-[10px] sm:text-xs bg-stone-700 hover:bg-red-700 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">👋 Quitter</a>
+
     
-    </div>
-    """
-    
-    return layout_jeu(f"Classement - {joueur['prenom']}", contenu, header_links)
+    return layout_jeu(f"Classement - {joueur['prenom']}", contenu)
 
 @router.get("/mon-carnet")
 def redirection_mon_carnet(request: Request):
@@ -713,3 +709,89 @@ def page_comparaison_groupe(request: Request, amis_ids: list[str] = Query(defaul
     """
     
     return layout_jeu("Comparateur", contenu)   
+
+
+# --- PAGE PROFIL ---
+@router.get("/profil", response_class=HTMLResponse)
+def page_profil(request: Request, erreur: str = None, succes: str = None):
+    session_id = request.cookies.get("session_faunabingo")
+    if not session_id:
+        return RedirectResponse(url="/connexion", status_code=303)
+        
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT prenom FROM Participant WHERE id_participant = ?", (session_id,))
+        joueur = cursor.fetchone()
+        
+    if not joueur:
+        return RedirectResponse(url="/deconnexion", status_code=303)
+        
+    pseudo_actuel = joueur[0]
+
+    # Gestion de l'affichage des alertes
+    html_alertes = ""
+    if erreur:
+        html_alertes = f'<div class="bg-red-100 text-red-800 p-4 rounded-xl mb-4 font-bold border border-red-200 shadow-sm">{erreur}</div>'
+    elif succes:
+        html_alertes = f'<div class="bg-lime-100 text-lime-800 p-4 rounded-xl mb-4 font-bold border border-lime-200 shadow-sm">{succes}</div>'
+
+    contenu = f"""
+    <div class="max-w-md mx-auto mt-4 sm:mt-8">
+        <div class="text-center mb-6">
+            <h2 class="text-3xl font-black text-stone-800 mb-2">Mon Profil</h2>
+            <p class="text-stone-500 text-sm">Gère tes informations personnelles.</p>
+        </div>
+
+        {html_alertes}
+
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-stone-200 mb-6">
+            <h3 class="font-bold text-stone-800 mb-4 text-lg border-b border-stone-100 pb-2">Changer de pseudo</h3>
+            <p class="text-stone-600 text-sm mb-4">Ton pseudo actuel est : <strong class="text-lime-700 bg-lime-50 px-2 py-1 rounded">{pseudo_actuel}</strong></p>
+
+            <form action="/profil/changer-pseudo" method="POST" class="space-y-4">
+                <div>
+                    <label for="nouveau_pseudo" class="block text-sm font-bold text-stone-700 mb-1">Nouveau pseudo :</label>
+                    <input type="text" id="nouveau_pseudo" name="nouveau_pseudo" placeholder="Ex: Explorateur99" required minlength="3" maxlength="20" 
+                           class="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-lime-500 focus:border-lime-500 outline-none transition bg-stone-50">
+                </div>
+                <button type="submit" class="w-full bg-lime-700 hover:bg-lime-800 text-white font-bold py-3 px-4 rounded-lg transition shadow-sm active:scale-95">
+                    💾 Enregistrer
+                </button>
+            </form>
+        </div>
+    </div>
+    """
+    
+    return layout_jeu("Mon Profil", contenu)
+
+
+@router.post("/profil/changer-pseudo")
+def changer_pseudo(request: Request, nouveau_pseudo: str = Form(...)):
+    session_id = request.cookies.get("session_faunabingo")
+    if not session_id:
+        return RedirectResponse(url="/connexion", status_code=303)
+
+    nouveau_pseudo = nouveau_pseudo.strip()
+
+    # Vérification de la longueur
+    if len(nouveau_pseudo) < 3:
+        erreur_url = urllib.parse.quote("Le pseudo doit faire au moins 3 caractères.")
+        return RedirectResponse(url=f"/profil?erreur={erreur_url}", status_code=303)
+
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        
+        # Vérification si le pseudo existe déjà (en ignorant la casse)
+        cursor.execute("SELECT id_participant FROM Participant WHERE LOWER(prenom) = LOWER(?)", (nouveau_pseudo,))
+        existant = cursor.fetchone()
+        
+        if existant and existant[0] != session_id:
+            erreur_url = urllib.parse.quote("Désolé, ce pseudo est déjà pris !")
+            return RedirectResponse(url=f"/profil?erreur={erreur_url}", status_code=303)
+            
+        # Mise à jour
+        cursor.execute("UPDATE Participant SET prenom = ? WHERE id_participant = ?", (nouveau_pseudo, session_id))
+        conn.commit()
+
+    succes_url = urllib.parse.quote(f"Ton pseudo a été changé en {nouveau_pseudo} !")
+    return RedirectResponse(url=f"/profil?succes={succes_url}", status_code=303)
