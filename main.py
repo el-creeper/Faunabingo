@@ -35,6 +35,12 @@ def export_base_de_donnees(cle_secrete: str = ""):
     return {"erreur": "La base de données est introuvable."}
 
 
+def optimiser_bdd():
+    """Active le mode WAL pour booster les performances de SQLite"""
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+
 def inserer_donnees_test():
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
@@ -58,6 +64,7 @@ def inserer_donnees_test():
 
 @app.on_event("startup")
 def startup_event():
+    optimiser_bdd()
     inserer_donnees_test()
 
 # --- BRANCHEMENT DES ROUTEURS ---
