@@ -52,6 +52,16 @@ def init_db():
             type_preuve TEXT,
             UNIQUE(id_participant, id_espece)
         );
+        
+        
+        CREATE TABLE IF NOT EXISTS Amitie (
+            id_demandeur TEXT,
+            id_receveur TEXT,
+            statut TEXT DEFAULT 'EN_ATTENTE',
+            PRIMARY KEY (id_demandeur, id_receveur),
+            FOREIGN KEY (id_demandeur) REFERENCES Participant(id_participant),
+            FOREIGN KEY (id_receveur) REFERENCES Participant(id_participant)
+        );
         """)
 
         # 2. LISTE DES ESPÈCES AVEC IDs STABLES

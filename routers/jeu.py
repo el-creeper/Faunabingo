@@ -1,12 +1,22 @@
 import sqlite3
 import uuid
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, Request, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 router = APIRouter(tags=["Jeu"])
 DB_NAME = "database/bingo_faune.db"
 
 def layout_jeu(titre: str, contenu: str, header_links: str = ""):
+    # Le menu est maintenant FIXE et identique sur toutes les pages
+    menu_fixe = """
+    <div class="flex space-x-1 sm:space-x-2 items-center">
+        <a href="/mon-carnet" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-2 rounded-lg transition font-medium shadow-sm flex items-center" title="Mon Carnet">📖<span class="hidden sm:inline ml-1">Carnet</span></a>
+        <a href="/amis" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-2 rounded-lg transition font-medium shadow-sm flex items-center" title="Amis">🤝<span class="hidden sm:inline ml-1">Amis</span></a>
+        <a href="/classement" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-2 rounded-lg transition font-medium shadow-sm flex items-center" title="Classement">🏆<span class="hidden sm:inline ml-1">Class.</span></a>
+        <a href="/deconnexion" class="text-[10px] sm:text-xs bg-stone-700 hover:bg-red-700 px-2 sm:px-3 py-2 rounded-lg transition font-medium shadow-sm flex items-center" title="Quitter">👋<span class="hidden sm:inline ml-1">Quitter</span></a>
+    </div>
+    """
+    
     return f"""
     <!DOCTYPE html>
     <html lang="fr">
@@ -17,13 +27,12 @@ def layout_jeu(titre: str, contenu: str, header_links: str = ""):
         <script src="https://cdn.tailwindcss.com"></script>
     </head>
     <body class="bg-slate-50 text-slate-800 font-sans min-h-screen pb-20">
-        <nav class="bg-lime-700 text-white shadow-md mb-6">
+        <nav class="bg-lime-700 text-white shadow-md mb-6 sticky top-0 z-50">
             <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
-                <h1 class="text-xl font-bold tracking-tight">🌿 FaunaBingo</h1>
-                {header_links}
+                <a href="/mon-carnet" class="text-lg sm:text-xl font-bold tracking-tight hover:text-lime-200 transition">🌿 FaunaBingo</a>
+                {menu_fixe}
             </div>
         </nav>
-        <!-- CORRECTION ICI : max-w-5xl permet d'élargir sur PC ! -->
         <main class="max-w-5xl mx-auto px-4 md:px-8">
             {contenu}
         </main>
@@ -356,6 +365,7 @@ def carnet_bord(request: Request, id_participant: str):
     
     header_links = """
     <div class="flex space-x-2 items-center">
+        <a href="/amis" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">🤝 Amis</a>
         <a href="/classement" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">🏆 Classement</a>
         <a href="/deconnexion" class="text-[10px] sm:text-xs bg-stone-700 hover:bg-red-700 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">👋 Quitter</a>
     </div>
@@ -425,30 +435,281 @@ def annuler_observation(request: Request, id_participant: str, id_espece: str = 
 
 # --- PAGE 3 : LE CLASSEMENT EN DIRECT ---
 @router.get("/classement", response_class=HTMLResponse)
-def page_classement():
+def page_classement(request: Request, amis: str = "0"):
+    session_id = request.cookies.get("session_faunabingo")
+    if not session_id:
+        return RedirectResponse(url="/connexion", status_code=303)
+        
+    # Vérifie si on veut voir le classement filtré sur les amis
+    vue_amis = (amis == "1")
+    
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT p.id_participant, p.prenom, p.score_total,
-                   COUNT(o.id_observation) as total_obs,
-                   SUM(CASE WHEN o.type_preuve = 'PHOTO' THEN 1 ELSE 0 END) as total_photos
-            FROM Participant p LEFT JOIN Observation o ON p.id_participant = o.id_participant
-            GROUP BY p.id_participant ORDER BY p.score_total DESC, total_obs DESC
-        """)
+        
+        # Info du joueur actuel
+        cursor.execute("SELECT prenom FROM Participant WHERE id_participant = ?", (session_id,))
+        joueur = cursor.fetchone()
+        
+        if vue_amis:
+            # REQUÊTE AMIS : Moi-même + Tous mes amis acceptés (dans les deux sens)
+            cursor.execute("""
+                SELECT id_participant, prenom, score_total 
+                FROM Participant 
+                WHERE id_participant = ? 
+                   OR id_participant IN (
+                       SELECT id_receveur FROM Amitie WHERE id_demandeur = ? AND statut = 'ACCEPTE'
+                       UNION
+                       SELECT id_demandeur FROM Amitie WHERE id_receveur = ? AND statut = 'ACCEPTE'
+                   )
+                ORDER BY score_total DESC
+            """, (session_id, session_id, session_id))
+        else:
+            # REQUÊTE GLOBALE : Tout le monde
+            cursor.execute("""
+                SELECT id_participant, prenom, score_total 
+                FROM Participant 
+                ORDER BY score_total DESC
+            """)
+            
         classement = cursor.fetchall()
 
-    html_lignes = ""
-    for index, joueur in enumerate(classement):
-        medaille = ["🥇", "🥈", "🥉"][index] if index < 3 else f"<span class='text-xl text-stone-400 font-black'>{index+1}</span>"
-        bg_color = ["bg-amber-100 border-amber-300", "bg-slate-200 border-slate-400", "bg-orange-100 border-orange-300"][index] if index < 3 else "bg-white border-stone-200"
-        text_color = ["text-amber-800", "text-slate-800", "text-orange-800"][index] if index < 3 else "text-stone-700"
+    # --- CONSTRUCTION DE L'INTERFACE ---
+    
+    # Boutons pour basculer (style "Switch" iOS)
+    style_btn_actif = "bg-white shadow-sm text-stone-800 pointer-events-none"
+    style_btn_inactif = "text-stone-500 hover:text-stone-800"
+    
+    html_boutons = f"""
+    <div class="flex p-1 bg-stone-200 rounded-lg mb-6 mx-auto max-w-sm">
+        <a href="/classement" class="flex-1 text-center py-2 text-sm font-bold rounded-md transition {style_btn_actif if not vue_amis else style_btn_inactif}">
+            🌍 Global
+        </a>
+        <a href="/classement?amis=1" class="flex-1 text-center py-2 text-sm font-bold rounded-md transition {style_btn_actif if vue_amis else style_btn_inactif}">
+            🤝 Mes Amis
+        </a>
+    </div>
+    """
 
-        html_lignes += f"""
-        <div class="{bg_color} border p-4 rounded-2xl shadow-sm mb-3 flex items-center justify-between transition">
-            <div class="flex items-center space-x-4"><div class="text-3xl w-10 text-center">{medaille}</div><div><h3 class="text-lg font-bold {text_color} leading-tight">{joueur['prenom']}</h3><p class="text-[11px] text-stone-500 mt-1 uppercase tracking-wide font-medium">{joueur['total_obs']} Espèces • {joueur['total_photos'] or 0} Photos</p></div></div>
-            <div class="text-right"><div class="text-3xl font-black {text_color} leading-none">{joueur['score_total']}</div><div class="text-[10px] uppercase font-bold text-stone-400 tracking-wider mt-1">Points</div></div>
+    # Liste du classement
+    html_liste = '<div class="space-y-3 max-w-2xl mx-auto">'
+    for index, p in enumerate(classement):
+        rank = index + 1
+        
+        # Les médailles pour le podium
+        if rank == 1: medaille = "🥇"
+        elif rank == 2: medaille = "🥈"
+        elif rank == 3: medaille = "🥉"
+        else: medaille = f"<span class='text-stone-400 font-bold text-sm'>#{rank}</span>"
+        
+        # Mettre en évidence le joueur connecté
+        est_moi = (p['id_participant'] == session_id)
+        bg_class = "bg-lime-50 border-lime-200" if est_moi else "bg-white border-stone-200"
+        text_class = "text-lime-800" if est_moi else "text-stone-800"
+        label_moi = "<span class='ml-2 text-[10px] bg-lime-200 text-lime-800 px-2 py-0.5 rounded-full font-black uppercase'>Toi</span>" if est_moi else ""
+        
+        html_liste += f"""
+        <div class="flex items-center justify-between p-4 rounded-xl shadow-sm border transition-all hover:shadow-md {bg_class}">
+            <div class="flex items-center gap-3 sm:gap-5">
+                <div class="w-8 text-center text-2xl">{medaille}</div>
+                <div>
+                    <div class="font-bold text-lg {text_class} flex items-center">{p['prenom']} {label_moi}</div>
+                    <a href="/carnet/{p['id_participant']}" class="text-xs text-indigo-600 font-bold hover:underline transition">Voir son carnet 👀</a>
+                </div>
+            </div>
+            <div class="text-right">
+                <div class="font-black text-xl {text_class}">{p['score_total']}</div>
+                <div class="text-[10px] uppercase font-bold text-stone-400 -mt-1">Points</div>
+            </div>
         </div>
         """
-    contenu = f'<div class="mb-8 text-center mt-4"><h2 class="text-3xl font-black text-stone-800 mb-2 tracking-tight">Le Podium</h2></div><div class="space-y-2">{html_lignes if html_lignes else "<p>Aucun participant.</p>"}</div>'
-    return layout_jeu("Classement", contenu, '<a href="/" class="text-xs bg-lime-800 hover:bg-lime-900 px-3 py-1.5 rounded-lg transition font-medium shadow-sm flex items-center">🏠 Retour</a>')
+        
+    html_liste += '</div>'
+    
+    # Petit message sympa si le joueur filtre sur "Amis" mais n'en a pas encore
+    if vue_amis and len(classement) == 1:
+        html_liste += """
+        <div class="text-center p-6 bg-white rounded-xl shadow-sm border border-stone-200 mt-4 max-w-2xl mx-auto">
+            <div class="text-4xl mb-2">😢</div>
+            <p class="text-sm text-stone-600 font-medium mb-4">Tu es seul dans ce classement pour le moment...</p>
+            <a href="/amis" class="inline-block bg-lime-700 hover:bg-lime-800 text-white font-bold py-2 px-5 rounded-xl transition shadow-sm">
+                Ajouter des amis
+            </a>
+        </div>
+        """
+
+    contenu = f"""
+    <div class="text-center mb-6">
+        <h2 class="text-3xl font-black text-stone-800 mb-2">Classement</h2>
+        <p class="text-stone-500 text-sm">Découvre qui est le meilleur explorateur.</p>
+    </div>
+    
+    {html_boutons}
+    {html_liste}
+    """
+    
+    header_links = f"""
+    <div class="flex space-x-2 items-center">
+        <a href="/amis" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">🤝 Amis</a>
+        <a href="/carnet/{session_id}" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">📖 Mon Carnet</a>
+        <a href="/deconnexion" class="text-[10px] sm:text-xs bg-stone-700 hover:bg-red-700 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">👋 Quitter</a>
+    
+    </div>
+    """
+    
+    return layout_jeu(f"Classement - {joueur['prenom']}", contenu, header_links)
+
+@router.get("/mon-carnet")
+def redirection_mon_carnet(request: Request):
+    """Redirige toujours vers le carnet du joueur connecté."""
+    session_id = request.cookies.get("session_faunabingo")
+    if session_id:
+        return RedirectResponse(url=f"/carnet/{session_id}", status_code=303)
+    return RedirectResponse(url="/connexion", status_code=303)
+
+
+@router.get("/comparer", response_class=HTMLResponse)
+def page_comparaison_groupe(request: Request, amis_ids: list[str] = Query(default=[])):
+    session_id = request.cookies.get("session_faunabingo")
+    if not session_id: return RedirectResponse(url="/connexion", status_code=303)
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # 1. Récupérer tes infos
+        cursor.execute("SELECT id_participant, prenom FROM Participant WHERE id_participant = ?", (session_id,))
+        moi = cursor.fetchone()
+        
+        # Sécurité si le cookie est périmé
+        if not moi:
+            return RedirectResponse(url="/deconnexion", status_code=303)
+
+        # 2. Récupérer UNIQUEMENT les amis qui ont été cochés
+        mes_amis = []
+        if amis_ids:
+            placeholders = ','.join(['?'] * len(amis_ids))
+            parametres_sql = [session_id, session_id, session_id] + amis_ids
+            
+            cursor.execute(f"""
+                SELECT p.id_participant, p.prenom 
+                FROM Amitie a
+                JOIN Participant p ON (p.id_participant = a.id_demandeur OR p.id_participant = a.id_receveur)
+                WHERE (a.id_demandeur = ? OR a.id_receveur = ?) 
+                  AND a.statut = 'ACCEPTE' 
+                  AND p.id_participant != ?
+                  AND p.id_participant IN ({placeholders})
+            """, tuple(parametres_sql))
+            mes_amis = cursor.fetchall()
+        
+        # On crée le groupe : Toi + Tes amis sélectionnés
+        joueurs = [moi] + mes_amis
+        ids_joueurs = [j['id_participant'] for j in joueurs]
+
+        # 3. Récupérer toutes les espèces
+        cursor.execute("SELECT * FROM Espece ORDER BY classe, nom_courant")
+        toutes_especes = cursor.fetchall()
+
+        # 4. Récupérer les observations de ce groupe spécifique
+        placeholders_obs = ','.join(['?'] * len(ids_joueurs))
+        cursor.execute(f"SELECT id_participant, id_espece, type_preuve FROM Observation WHERE id_participant IN ({placeholders_obs})", tuple(ids_joueurs))
+        obs_brutes = cursor.fetchall()
+
+        # 5. On range les observations par joueur
+        obs_groupe = {j['id_participant']: {} for j in joueurs}
+        for o in obs_brutes:
+            obs_groupe[o['id_participant']][o['id_espece']] = o['type_preuve']
+
+    # --- CONSTRUCTION DU TABLEAU MULTI-JOUEURS ---
+    
+    def icone_preuve(preuve):
+        if preuve == "PHOTO": return "📸"
+        if preuve == "VU": return "👀"
+        if preuve == "ENTENDU": return "🔊"
+        return "<span class='text-stone-200 font-normal'>-</span>"
+
+    # En-têtes (Toi, Ami 1, Ami 2...)
+    html_entetes = f'<th class="px-3 py-3 font-bold text-sm min-w-[160px] sticky left-0 bg-stone-800 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)]">Espèce</th>'
+    for j in joueurs:
+        if j['id_participant'] == session_id:
+            nom = "Toi"
+            bg_th = "bg-lime-700"
+        else:
+            nom = j['prenom']
+            bg_th = "bg-stone-700"
+        html_entetes += f'<th class="px-2 py-3 font-bold text-sm text-center min-w-[80px] {bg_th} border-l border-stone-600 z-10">{nom}</th>'
+
+    html_lignes = ""
+    categorie_actuelle = ""
+    colonnes_totales = len(joueurs) + 1
+
+    for esp in toutes_especes:
+        nom_cat = esp['classe'] if esp['classe'] else "Non classé"
+        
+        # Intercalaire de catégorie
+        if nom_cat != categorie_actuelle:
+            html_lignes += f'''
+            <tr class="bg-stone-200 border-b border-stone-300">
+                <td colspan="{colonnes_totales}" class="px-3 py-2 font-black text-stone-700 text-sm uppercase tracking-wide sticky left-0 z-10 bg-stone-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">{nom_cat}</td>
+            </tr>
+            '''
+            categorie_actuelle = nom_cat
+
+        # Vérifier si au moins une personne du groupe a trouvé l'animal
+        nb_trouvailles = sum(1 for j in joueurs if esp['id_espece'] in obs_groupe[j['id_participant']])
+        opacite = "opacity-50 grayscale" if nb_trouvailles == 0 else ""
+        img_src = f"/{esp['image_reference']}" if esp['image_reference'] else "/static/placeholder.png"
+
+        html_lignes += f'<tr class="border-b border-stone-100 {opacite}">'
+        
+        # Colonne Espèce (Toujours fixée à gauche)
+        html_lignes += f'''
+            <td class="px-2 py-2 flex items-center gap-3 sticky left-0 bg-white shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10">
+                <img src="{img_src}" class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover bg-stone-100 shrink-0 shadow-sm">
+                <div>
+                    <div class="font-bold text-stone-800 text-xs sm:text-sm leading-tight">{esp['nom_courant']}</div>
+                    <div class="text-[9px] sm:text-[10px] text-stone-500 italic">{esp['nom_scientifique']}</div>
+                </div>
+            </td>
+        '''
+        
+        # Colonnes des joueurs
+        for index, j in enumerate(joueurs):
+            preuve = obs_groupe[j['id_participant']].get(esp['id_espece'])
+            
+            # Petites couleurs alternées pour aider la lecture horizontale
+            if j['id_participant'] == session_id:
+                bg_cell = "bg-lime-50" if preuve else "bg-white"
+            else:
+                bg_cell = "bg-indigo-50" if preuve else ("bg-stone-50" if index % 2 == 1 else "bg-white")
+                
+            html_lignes += f'<td class="text-center text-lg {bg_cell} border-l border-stone-100">{icone_preuve(preuve)}</td>'
+            
+        html_lignes += '</tr>'
+
+    contenu = f"""
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h2 class="text-2xl font-black text-stone-800">Comparateur ⚔️</h2>
+            <p class="text-stone-500 text-sm">Le tableau de chasse du groupe</p>
+        </div>
+        <a href="/amis" class="px-3 py-2 bg-white border border-stone-300 shadow-sm rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition flex items-center gap-1">
+            ⬅️ <span class="hidden sm:inline">Retour</span>
+        </a>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-x-auto mb-8 relative">
+        <table class="w-full text-left border-collapse min-w-max">
+            <thead>
+                <tr class="bg-stone-800 text-white">
+                    {html_entetes}
+                </tr>
+            </thead>
+            <tbody>
+                {html_lignes}
+            </tbody>
+        </table>
+    </div>
+    """
+    
+    return layout_jeu("Comparateur", contenu)

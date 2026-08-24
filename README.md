@@ -23,7 +23,5 @@ Chaque joueur dispose de son propre carnet de bord avec une liste d'animaux. Les
 
 ## FUTUR UPDATE
 
-1. Rajouter un système d'ami
-1. Faire un tableau pour comparer les points entre amis
 1. Donner plus d'informations sur les especes
 1. Avoir des missions quotidiennes pour marquer des points supplémentaires

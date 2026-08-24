@@ -144,3 +144,88 @@ def envoyer_email_reinitialisation(email_destinataire: str, lien_reset: str):
         print(f"✅ Email de reset envoyé à {email_destinataire}")
     except Exception as e:
         print(f"❌ Erreur lors de l'envoi de l'email : {e}")
+        
+        
+def envoyer_email_demande_ami(email_destinataire: str, prenom_demandeur: str, lien_amis: str):
+    """Envoie un e-mail quand on reçoit une demande d'ami d'un autre joueur."""
+    SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+    SMTP_USER = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+
+    if not SMTP_PASSWORD:
+        print(f"📩 [SIMULATION] Demande d'ami de {prenom_demandeur} envoyée à : {email_destinataire}")
+        return
+
+    sujet = f"🤝 {prenom_demandeur} veut t'ajouter sur FaunaBingo !"
+    html = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; color: #333; background-color: #f5f5f4; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 15px; border: 1px solid #e7e5e4; text-align: center;">
+                <h2 style="color: #4d7c0f; margin-top: 0;">Nouvelle demande d'ami ! 🐾</h2>
+                <p><strong>{prenom_demandeur}</strong> t'a envoyé une demande d'ami sur FaunaBingo.</p>
+                <p>Accepte sa demande pour pouvoir comparer vos scores et voir les animaux que vous avez photographiés.</p>
+                <a href="{lien_amis}" style="display: inline-block; background-color: #4d7c0f; color: white; padding: 12px 25px; text-decoration: none; border-radius: 10px; font-weight: bold; margin: 20px 0;">
+                    Voir mes demandes
+                </a>
+            </div>
+        </body>
+    </html>
+    """
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = sujet
+    msg["From"] = f"FaunaBingo <{SMTP_USER}>"
+    msg["To"] = email_destinataire
+    msg.attach(MIMEText(html, "html"))
+
+    try:
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SMTP_USER, SMTP_PASSWORD)
+        server.sendmail(SMTP_USER, email_destinataire, msg.as_string())
+        server.quit()
+    except Exception as e:
+        print(f"❌ Erreur email : {e}")
+
+def envoyer_email_invitation(email_destinataire: str, prenom_demandeur: str, lien_accueil: str):
+    """Envoie un e-mail à quelqu'un qui n'a pas encore de compte FaunaBingo."""
+    SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+    SMTP_USER = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+
+    if not SMTP_PASSWORD:
+        print(f"📩 [SIMULATION] Invitation de {prenom_demandeur} envoyée à : {email_destinataire}")
+        return
+
+    sujet = f"🌿 {prenom_demandeur} t'invite à jouer à FaunaBingo !"
+    html = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; color: #333; background-color: #f5f5f4; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 15px; border: 1px solid #e7e5e4; text-align: center;">
+                <h2 style="color: #4d7c0f; margin-top: 0;">Rejoins FaunaBingo ! 📸</h2>
+                <p><strong>{prenom_demandeur}</strong> aimerait t'ajouter en ami sur FaunaBingo, un jeu de collection d'animaux sauvages.</p>
+                <p>Crée ton compte dès maintenant pour commencer ton carnet de bord et voir son score !</p>
+                <a href="{lien_accueil}" style="display: inline-block; background-color: #ca8a04; color: white; padding: 12px 25px; text-decoration: none; border-radius: 10px; font-weight: bold; margin: 20px 0;">
+                    Découvrir le jeu
+                </a>
+            </div>
+        </body>
+    </html>
+    """
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = sujet
+    msg["From"] = f"FaunaBingo <{SMTP_USER}>"
+    msg["To"] = email_destinataire
+    msg.attach(MIMEText(html, "html"))
+
+    try:
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SMTP_USER, SMTP_PASSWORD)
+        server.sendmail(SMTP_USER, email_destinataire, msg.as_string())
+        server.quit()
+    except Exception as e:
+        print(f"❌ Erreur email : {e}")
