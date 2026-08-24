@@ -2,4 +2,11 @@ __pycache__/
 *.pyc
 .env
 
-database/bingo_faune.db
+migration.py
+
+# Bases de données SQLite
+*.db
+*.sqlite
+*.db-wal
+*.db-shm
+database/
