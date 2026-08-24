@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-app = FastAPI(title="FaunaBingo")
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 DB_NAME = "database/bingo_faune.db"
 
