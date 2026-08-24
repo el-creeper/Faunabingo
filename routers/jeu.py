@@ -712,4 +712,4 @@ def page_comparaison_groupe(request: Request, amis_ids: list[str] = Query(defaul
     </div>
     """
     
-    return layout_jeu("Comparateur", contenu)
+    return layout_jeu("Comparateur", contenu)   
