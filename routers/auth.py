@@ -6,7 +6,7 @@ from securite import (hacher_email, hacher_mot_de_passe, verifier_mot_de_passe,
                       generer_token_inscription, lire_token_inscription, 
                       generer_token_mdp, lire_token_mdp)
 from emails import envoyer_email_bienvenue, envoyer_email_compte_existant, envoyer_email_reinitialisation
-from jeu import layout_jeu
+from routers.jeu import layout_jeu
 
 
 router = APIRouter(tags=["Authentification"])
