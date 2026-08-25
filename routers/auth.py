@@ -1,6 +1,6 @@
 import sqlite3
 import uuid
-from fastapi import APIRouter, Form, BackgroundTasks, Response, Request
+from fastapi import APIRouter, Form, BackgroundTasks, Response, Request, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from securite import (hacher_email, hacher_mot_de_passe, verifier_mot_de_passe, 
                       generer_token_inscription, lire_token_inscription, 
