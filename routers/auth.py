@@ -301,7 +301,7 @@ def traiter_demande_reset(request: Request, background_tasks: BackgroundTasks, e
     return HTMLResponse(content=layout_auth("Email envoyé", succes))
 
 
-@router.get("/reinitialiser-mdp", response_class=HTMLResponse)
+@router.get("/reinitialiser-mot-de-passe", response_class=HTMLResponse)
 def page_reinitialiser_mdp(request: Request, token: str = Query(...)):
     # 1. On déchiffre le jeton pour voir s'il est valide et récupérer l'email
     email = lire_token_mdp(token)
@@ -314,7 +314,7 @@ def page_reinitialiser_mdp(request: Request, token: str = Query(...)):
     contenu = f"""
     <div class="max-w-md mx-auto mt-10 bg-white p-6 rounded-xl shadow-sm border border-stone-200">
         <h2 class="text-2xl font-black mb-4">Nouveau mot de passe</h2>
-        <form action="/reinitialiser-mdp" method="POST" class="space-y-4">
+        <form action="/reinitialiser-mot-de-passe" method="POST" class="space-y-4">
             <!-- On renvoie le jeton caché pour que le POST sache de qui on parle -->
             <input type="hidden" name="token" value="{token}">
             
@@ -332,7 +332,7 @@ def page_reinitialiser_mdp(request: Request, token: str = Query(...)):
     return layout_jeu("Nouveau mot de passe", contenu)
 
 
-@router.post("/reinitialiser-mdp", response_class=HTMLResponse)
+@router.post("/reinitialiser-mot-de-passe", response_class=HTMLResponse)
 def traiter_nouveau_mdp(request: Request, token: str = Form(...), nouveau_mdp: str = Form(...)):
     # 1. On revérifie le jeton (sécurité)
     email = lire_token_mdp(token)
