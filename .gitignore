@@ -10,4 +10,4 @@ migration.py
 *.sqlite
 *.db-wal
 *.db-shm
-database/
+database/bungo_faune.db
