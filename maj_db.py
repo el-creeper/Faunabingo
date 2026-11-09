@@ -1,6 +1,6 @@
 import sqlite3
 
-DB_NAME = "faunabingo.db"
+DB_NAME = "database/bingo_faune.db"
 
 # Dictionnaire des remplacements : {"Ancien nom": "Nouveau nom"}
 remplacements = {
