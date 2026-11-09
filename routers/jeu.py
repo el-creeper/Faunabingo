@@ -80,6 +80,7 @@ def layout_jeu(titre: str, contenu: str, header_links: str = ""):
             /* Gestion de l'encoche et de la barre de navigation tactile des iPhones/Androids modernes */
             .pb-safe {{ padding-bottom: env(safe-area-inset-bottom, 0.5rem); }}
         </style>
+    <meta name="google-site-verification" content="iCZU4lbKVByu4YeP8Ytnqlgnp9SrKmFCkWAgMQOFjrc" />
     </head>
     <!-- pb-24 évite que le contenu tout en bas ne soit caché par la barre de navigation mobile -->
     <body class="bg-slate-50 text-slate-800 font-sans min-h-screen pb-24 md:pb-10">
