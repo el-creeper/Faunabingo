@@ -9,14 +9,40 @@ router = APIRouter(tags=["Jeu"])
 DB_NAME = "database/bingo_faune.db"
 
 def layout_jeu(titre: str, contenu: str, header_links: str = ""):
-    # Le menu est maintenant FIXE et identique sur toutes les pages
-    menu_fixe = """
-    <div class="flex space-x-1 sm:space-x-2 items-center">
-        <a href="/mon-carnet" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-2 rounded-lg transition font-medium shadow-sm flex items-center" title="Mon Carnet">📖<span class="hidden sm:inline ml-1">Carnet</span></a>
-        <a href="/amis" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-2 rounded-lg transition font-medium shadow-sm flex items-center" title="Amis">🤝<span class="hidden sm:inline ml-1">Amis</span></a>
-        <a href="/classement" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-2 rounded-lg transition font-medium shadow-sm flex items-center" title="Classement">🏆<span class="hidden sm:inline ml-1">Class.</span></a>
-        <a href="/profil" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-2 rounded-lg transition font-medium shadow-sm flex items-center" title="Profil">👤<span class="hidden sm:inline ml-1">Profil</span></a>
-        <a href="/deconnexion" class="text-[10px] sm:text-xs bg-stone-700 hover:bg-red-700 px-2 sm:px-3 py-2 rounded-lg transition font-medium shadow-sm flex items-center" title="Quitter">👋<span class="hidden sm:inline ml-1">Quitter</span></a>
+    # 1. Menu pour les grands écrans (PC / Tablettes) - En haut
+    menu_desktop = """
+    <div class="hidden md:flex space-x-3 items-center">
+        <a href="/mon-carnet" class="text-sm bg-lime-800 hover:bg-lime-900 px-4 py-2 rounded-lg transition font-medium shadow-sm flex items-center">📖 <span class="ml-2">Carnet</span></a>
+        <a href="/amis" class="text-sm bg-lime-800 hover:bg-lime-900 px-4 py-2 rounded-lg transition font-medium shadow-sm flex items-center">🤝 <span class="ml-2">Amis</span></a>
+        <a href="/classement" class="text-sm bg-lime-800 hover:bg-lime-900 px-4 py-2 rounded-lg transition font-medium shadow-sm flex items-center">🏆 <span class="ml-2">Classement</span></a>
+        <a href="/profil" class="text-sm bg-lime-800 hover:bg-lime-900 px-4 py-2 rounded-lg transition font-medium shadow-sm flex items-center">👤 <span class="ml-2">Profil</span></a>
+        <a href="/deconnexion" class="text-sm bg-stone-700 hover:bg-red-700 px-4 py-2 rounded-lg transition font-medium shadow-sm flex items-center">👋 <span class="ml-2">Quitter</span></a>
+    </div>
+    """
+
+    # 2. Menu pour les petits écrans (Smartphones) - Barre fixée en bas (façon app mobile)
+    menu_mobile = """
+    <div class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 flex justify-around items-center pt-2 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-50">
+        <a href="/mon-carnet" class="flex flex-col items-center p-2 text-stone-500 hover:text-lime-700 active:scale-95 transition w-full">
+            <span class="text-xl mb-1">📖</span>
+            <span class="text-[10px] font-bold">Carnet</span>
+        </a>
+        <a href="/amis" class="flex flex-col items-center p-2 text-stone-500 hover:text-lime-700 active:scale-95 transition w-full">
+            <span class="text-xl mb-1">🤝</span>
+            <span class="text-[10px] font-bold">Amis</span>
+        </a>
+        <a href="/classement" class="flex flex-col items-center p-2 text-stone-500 hover:text-lime-700 active:scale-95 transition w-full">
+            <span class="text-xl mb-1">🏆</span>
+            <span class="text-[10px] font-bold">Class.</span>
+        </a>
+        <a href="/profil" class="flex flex-col items-center p-2 text-stone-500 hover:text-lime-700 active:scale-95 transition w-full">
+            <span class="text-xl mb-1">👤</span>
+            <span class="text-[10px] font-bold">Profil</span>
+        </a>
+        <a href="/deconnexion" class="flex flex-col items-center p-2 text-stone-400 hover:text-red-500 active:scale-95 transition w-full">
+            <span class="text-xl mb-1">👋</span>
+            <span class="text-[10px] font-bold">Quitter</span>
+        </a>
     </div>
     """
     
@@ -25,20 +51,27 @@ def layout_jeu(titre: str, contenu: str, header_links: str = ""):
     <html lang="fr">
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <!-- Ajout de user-scalable=no pour bloquer le zoom intempestif sur mobile (effet App native) -->
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>{titre}</title>
         <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            /* Gestion de l'encoche et de la barre de navigation tactile des iPhones/Androids modernes */
+            .pb-safe {{ padding-bottom: env(safe-area-inset-bottom, 0.5rem); }}
+        </style>
     </head>
-    <body class="bg-slate-50 text-slate-800 font-sans min-h-screen pb-20">
-        <nav class="bg-lime-700 text-white shadow-md mb-6 sticky top-0 z-50">
+    <!-- pb-24 évite que le contenu tout en bas ne soit caché par la barre de navigation mobile -->
+    <body class="bg-slate-50 text-slate-800 font-sans min-h-screen pb-24 md:pb-10">
+        <nav class="bg-lime-700 text-white shadow-md mb-6 sticky top-0 z-40">
             <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
-                <a href="/mon-carnet" class="text-lg sm:text-xl font-bold tracking-tight hover:text-lime-200 transition">🌿 FaunaBingo</a>
-                {menu_fixe}
+                <a href="/mon-carnet" class="text-xl font-bold tracking-tight hover:text-lime-200 transition">🌿 FaunaBingo</a>
+                {menu_desktop}
             </div>
         </nav>
         <main class="max-w-5xl mx-auto px-4 md:px-8">
             {contenu}
         </main>
+        {menu_mobile}
     </body>
     </html>
     """
