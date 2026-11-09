@@ -1,0 +1,16 @@
+{
+  "name": "FaunaBingo",
+  "short_name": "FaunaBingo",
+  "start_url": "/mon-carnet",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#4d7c0f",
+  "description": "Découvre la faune du Costa Rica !",
+  "icons": [
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

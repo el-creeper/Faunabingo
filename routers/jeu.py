@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Form, Request, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 import urllib.parse 
+from typing import Optional
 
 
 router = APIRouter(tags=["Jeu"])
@@ -50,11 +51,20 @@ def layout_jeu(titre: str, contenu: str, header_links: str = ""):
     <!DOCTYPE html>
     <html lang="fr">
     <head>
-        <meta charset="UTF-8">
-        <!-- Ajout de user-scalable=no pour bloquer le zoom intempestif sur mobile (effet App native) -->
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>{titre}</title>
-        <script src="https://cdn.tailwindcss.com"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>{titre}</title>
+    
+    <!-- LES 3 NOUVELLES LIGNES POUR LA PWA -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#4d7c0f">
+    <script>
+    if ('serviceWorker' in navigator) {{
+        navigator.serviceWorker.register('/static/sw.js');
+    }}
+    </script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
         <style>
             /* Gestion de l'encoche et de la barre de navigation tactile des iPhones/Androids modernes */
             .pb-safe {{ padding-bottom: env(safe-area-inset-bottom, 0.5rem); }}
@@ -746,7 +756,7 @@ def page_comparaison_groupe(request: Request, amis_ids: list[str] = Query(defaul
 
 # --- PAGE PROFIL ---
 @router.get("/profil", response_class=HTMLResponse)
-def page_profil(request: Request, erreur: str = None, succes: str = None):
+def page_profil(request: Request, erreur: Optional[str] = None, succes: Optional[str] = None):
     session_id = request.cookies.get("session_faunabingo")
     if not session_id:
         return RedirectResponse(url="/connexion", status_code=303)
