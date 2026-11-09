@@ -1,9 +1,10 @@
 import sqlite3
 import uuid
-from fastapi import APIRouter, Form, Request, Query
+from fastapi import APIRouter, Form, Request, Query, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 import urllib.parse 
 from typing import Optional
+import json
 
 
 router = APIRouter(tags=["Jeu"])
@@ -803,9 +804,109 @@ def page_profil(request: Request, erreur: Optional[str] = None, succes: Optional
             </form>
         </div>
     </div>
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-stone-200 mb-6">
+    <h3 class="text-lg font-bold text-stone-800 mb-4">Mes données personnelles (RGPD)</h3>
+    
+    <div class="space-y-4">
+        <!-- Bouton Télécharger -->
+        <div class="flex justify-between items-center p-4 bg-stone-50 rounded-lg border border-stone-200">
+            <div>
+                <div class="font-bold text-stone-700">Télécharger mes données</div>
+                <div class="text-xs text-stone-500">Obtiens une copie de tes données au format JSON.</div>
+            </div>
+            <a href="/profil/telecharger" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition">📥 Télécharger</a>
+        </div>
+
+        <!-- Bouton Supprimer (avec confirmation Javascript) -->
+        <div class="flex justify-between items-center p-4 bg-red-50 rounded-lg border border-red-200">
+            <div>
+                <div class="font-bold text-red-700">Supprimer mon compte</div>
+                <div class="text-xs text-red-500">Action irréversible. Toutes tes données seront effacées.</div>
+            </div>
+            <form action="/profil/supprimer" method="POST" onsubmit="return confirm('Es-tu sûr(e) de vouloir supprimer définitivement ton compte ? Cette action est irréversible.');">
+                <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition">🗑️ Supprimer</button>
+            </form>
+        </div>
+    </div>
+</div>
+    <p class="text-xs text-center text-stone-400 mt-4">
+    En vous connectant, vous acceptez notre <a href="/confidentialite" class="underline hover:text-lime-700">Politique de Confidentialité</a>.
+    </p>
     """
     
     return layout_jeu("Mon Profil", contenu)
+
+
+
+@router.get("/profil/telecharger")
+def telecharger_donnees(request: Request):
+    session_id = request.cookies.get("session_faunabingo")
+    if not session_id:
+        return RedirectResponse(url="/connexion", status_code=303)
+    
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # 1. Infos de base
+        cursor.execute("SELECT prenom, score_total FROM Participant WHERE id_participant = ?", (session_id,))
+        joueur = dict(cursor.fetchone())
+        
+        # 2. Liste des amis
+        cursor.execute("""
+            SELECT p.prenom, a.statut 
+            FROM Amitie a
+            JOIN Participant p ON (p.id_participant = a.id_receveur OR p.id_participant = a.id_demandeur)
+            WHERE (a.id_demandeur = ? OR a.id_receveur = ?) 
+              AND p.id_participant != ?
+              AND (a.statut = 'ACCEPTE' OR (a.statut = 'EN_ATTENTE' AND a.id_receveur = ?))
+        """, (session_id, session_id, session_id, session_id))
+        amis = [dict(row) for row in cursor.fetchall()]
+        
+        # Si tu as une table spécifique pour les animaux trouvés (ex: Carnet), tu peux l'ajouter ici
+        # cursor.execute("SELECT animal, date_trouve FROM Carnet WHERE id_participant = ?", (session_id,))
+        # carnet = [dict(row) for row in cursor.fetchall()]
+        
+        donnees = {
+            "profil": joueur,
+            "amis": amis,
+            # "carnet": carnet
+        }
+        
+    json_data = json.dumps(donnees, indent=4, ensure_ascii=False)
+    
+    return Response(
+        content=json_data, 
+        media_type="application/json", 
+        # Cela force le navigateur à télécharger le fichier
+        headers={"Content-Disposition": "attachment; filename=mes_donnees_faunabingo.json"}
+    )
+
+
+@router.post("/profil/supprimer")
+def supprimer_compte(request: Request):
+    session_id = request.cookies.get("session_faunabingo")
+    if not session_id:
+        return RedirectResponse(url="/connexion", status_code=303)
+    
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        
+        # 1. Supprimer les amitiés
+        cursor.execute("DELETE FROM Amitie WHERE id_demandeur = ? OR id_receveur = ?", (session_id, session_id))
+        
+        # 2. Supprimer la progression dans le carnet (adapte le nom de ta table si besoin)
+        # cursor.execute("DELETE FROM Carnet WHERE id_participant = ?", (session_id,))
+        
+        # 3. Supprimer le joueur
+        cursor.execute("DELETE FROM Participant WHERE id_participant = ?", (session_id,))
+        
+        conn.commit()
+        
+    # Redirection vers l'accueil avec suppression du cookie
+    reponse = RedirectResponse(url="/?succes=Ton compte et toutes tes données ont été définitivement supprimés.", status_code=303)
+    reponse.delete_cookie("session_faunabingo")
+    return reponse
 
 
 @router.post("/profil/changer-pseudo")
@@ -838,3 +939,71 @@ def changer_pseudo(request: Request, nouveau_pseudo: str = Form(...)):
 
     succes_url = urllib.parse.quote(f"Ton pseudo a été changé en {nouveau_pseudo} !")
     return RedirectResponse(url=f"/profil?succes={succes_url}", status_code=303)
+
+@router.get("/confidentialite", response_class=HTMLResponse)
+def page_confidentialite(request: Request):
+    session_id = request.cookies.get("session_faunabingo")
+    
+    # Adaptation du menu selon si l'utilisateur est connecté ou non
+    if session_id:
+        header_links = """
+        <div class="flex space-x-2 items-center">
+            <a href="/mon-carnet" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">📖 Mon Carnet</a>
+            <a href="/profil" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">👤 Profil</a>
+        </div>
+        """
+    else:
+        header_links = """
+        <div class="flex space-x-2 items-center">
+            <a href="/connexion" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">Se connecter</a>
+        </div>
+        """
+
+    # Texte de la politique de confidentialité formaté avec Tailwind
+    contenu = """
+    <div class="bg-white p-6 md:p-10 rounded-2xl shadow-sm border border-stone-200 mb-8 max-w-3xl mx-auto mt-4">
+        <h1 class="text-3xl font-black text-stone-800 mb-6">Politique de Confidentialité</h1>
+        
+        <div class="space-y-6 text-stone-600 text-sm md:text-base leading-relaxed">
+            <section>
+                <h2 class="text-xl font-bold text-stone-800 mb-2">1. Collecte des données</h2>
+                <p>Pour le bon fonctionnement de l'application FaunaBingo, nous collectons les informations suivantes lors de votre inscription :</p>
+                <ul class="list-disc list-inside mt-2 space-y-1 ml-2 text-stone-700">
+                    <li><strong>Adresse e-mail :</strong> Utilisée uniquement pour la connexion, la récupération de mot de passe et le système d'invitation entre amis.</li>
+                    <li><strong>Mot de passe :</strong> Haché de manière sécurisée (bcrypt). Nous n'avons et n'aurons jamais accès à votre mot de passe en clair.</li>
+                    <li><strong>Prénom ou Pseudo :</strong> Utilisé pour l'affichage dans le jeu, les classements et le système d'amis.</li>
+                    <li><strong>Données de jeu :</strong> Vos scores et la progression de votre carnet.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-bold text-stone-800 mb-2">2. Utilisation des données</h2>
+                <p>Vos données sont strictement utilisées dans le cadre du fonctionnement de FaunaBingo. <strong>En aucun cas vos informations (notamment votre adresse e-mail) ne sont vendues, louées, cédées ou partagées avec des tiers à des fins commerciales ou publicitaires.</strong></p>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-bold text-stone-800 mb-2">3. Sécurité</h2>
+                <p>Les données sont stockées de manière sécurisée et le trafic entre votre appareil et nos serveurs est chiffré de bout en bout (HTTPS/SSL). Des mesures anti-énumération sont en place pour empêcher la déduction des e-mails de nos utilisateurs.</p>
+            </section>
+
+           <section>
+            <h2 class="text-xl font-bold text-stone-800 mb-2">4. Vos droits (RGPD)</h2>
+            <p>Conformément à la réglementation européenne (RGPD), vous disposez d'un droit d'accès, de rectification, de portabilité et de suppression de vos données.</p>
+            <p class="mt-2">Depuis la page de votre Profil, vous pouvez à tout moment :</p>
+            <ul class="list-disc list-inside mt-1 ml-2 text-stone-700">
+                <li><strong>Télécharger vos données :</strong> Obtenir une copie lisible de vos informations et de votre progression.</li>
+                <li><strong>Supprimer votre compte :</strong> Effacer définitivement votre profil et toutes les données associées de nos serveurs.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2 class="text-xl font-bold text-stone-800 mb-2">5. Contact</h2>
+            <p>FaunaBingo est une application ludique développée et gérée de manière indépendante. Pour toute question relative à la gestion de vos données personnelles, vous pouvez utiliser les options de contact présentes dans l'application.</p>
+        </section>
+            
+            <p class="text-xs text-stone-400 mt-8 pt-4 border-t border-stone-100">Dernière mise à jour : Novembre 2026</p>
+        </div>
+    </div>
+    """
+    
+    return HTMLResponse(content=layout_jeu("Confidentialité - FaunaBingo", contenu, header_links))

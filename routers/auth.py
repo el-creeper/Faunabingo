@@ -7,6 +7,7 @@ from securite import (hacher_email, hacher_mot_de_passe, verifier_mot_de_passe,
                       generer_token_mdp, lire_token_mdp)
 from emails import envoyer_email_bienvenue, envoyer_email_compte_existant, envoyer_email_reinitialisation
 from routers.jeu import layout_jeu
+import json
 
 
 router = APIRouter(tags=["Authentification"])
@@ -195,8 +196,14 @@ def page_connexion():
     <div class="mt-6 text-center border-t border-stone-100 pt-5">
         <p class="text-sm text-stone-600">Pas encore de compte ? <a href="/inscription" class="font-bold text-lime-700 hover:underline">S'inscrire</a></p>
     </div>
+    <p class="text-xs text-center text-stone-400 mt-4">
+    En vous connectant, vous acceptez notre <a href="/confidentialite" class="underline hover:text-lime-700">Politique de Confidentialité</a>.
+   </p>
     """
     return layout_auth("Connexion", contenu)
+
+
+
 
 @router.post("/connexion")
 def traiter_connexion(email: str = Form(...), mot_de_passe: str = Form(...)):
