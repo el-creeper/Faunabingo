@@ -64,8 +64,10 @@ def page_inscription():
         </div>
     </form>
     
-    <div class="mt-6 text-center border-t border-stone-100 pt-5">
-        <p class="text-sm text-stone-600">Déjà un compte ? <a href="/connexion" class="font-bold text-lime-700 hover:underline">Se connecter</a></p>
+    <div class="text-xs text-center text-stone-400 mt-6 space-x-2">
+        <a href="/confidentialite" class="underline hover:text-lime-700">Confidentialité</a>
+        <span>&bull;</span>
+        <a href="/credits" class="underline hover:text-lime-700">Crédits photos</a>
     </div>
     """
     return layout_auth("Créer un compte", contenu)

@@ -7,6 +7,7 @@ from typing import Optional
 import json
 
 
+
 router = APIRouter(tags=["Jeu"])
 DB_NAME = "database/bingo_faune.db"
 
@@ -829,9 +830,11 @@ def page_profil(request: Request, erreur: Optional[str] = None, succes: Optional
         </div>
     </div>
 </div>
-    <p class="text-xs text-center text-stone-400 mt-4">
-    En vous connectant, vous acceptez notre <a href="/confidentialite" class="underline hover:text-lime-700">Politique de Confidentialité</a>.
-    </p>
+    <div class="text-xs text-center text-stone-400 mt-6 space-x-2">
+            <a href="/confidentialite" class="underline hover:text-lime-700">Confidentialité</a>
+            <span>&bull;</span>
+            <a href="/credits" class="underline hover:text-lime-700">Crédits photos</a>
+        </div>
     """
     
     return layout_jeu("Mon Profil", contenu)
@@ -1007,3 +1010,158 @@ def page_confidentialite(request: Request):
     """
     
     return HTMLResponse(content=layout_jeu("Confidentialité - FaunaBingo", contenu, header_links))
+
+CREDITS_IMAGES = [
+    {"nom": "Abeille sans dard", "auteur": "José Reynaldo da Fonseca", "licence": "Creative Commons Attribution 2.5", "source": "https://commons.wikimedia.org/wiki/File:Irapu%C3%A3_-_REFON.jpg"},
+    {"nom": "Agouti ponctue", "auteur": "Charles J. Sharp", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Central_American_agouti_(Dasyprocta_punctata)_Los_Tarrales.jpg"},
+    {"nom": "Aigrette neigeuse", "auteur": "Paul Danese", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:20250703_snowy_egret_long_wharf_pier_PD207320.jpg"},
+    {"nom": "Ara de Buffon", "auteur": "Ruth Rogers", "licence": "Creative Commons Attribution 2.0", "source": "https://commons.wikimedia.org/wiki/File:Ara_ambiguus_-captive-8a.jpg"},
+    {"nom": "Ara macao", "auteur": "cello caruso-turiello", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:Ara_macao_411126012.jpg"},
+    {"nom": "Araignee Nephile doree", "auteur": "Drosera", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:N%C3%A9phile_Dor%C3%A9e_-_Silhouette_-_2015.jpg"},
+    {"nom": "Arbre a pain", "auteur": "Hans Hillewaert", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Artocarpus_altilis_(fruit).jpg"},
+    {"nom": "Arbre de Guanacaste", "auteur": "Flicka", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Enterolobium_cyclocarpum_in_Guanacaste.jpg"},
+    {"nom": "Balbuzard pecheur", "auteur": "El Golli Mohamed", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Balbuzard_pecheur_Lac_de_Tunis.jpg"},
+    {"nom": "Baleine a bosse", "auteur": "DataBase Center for Life Science (DBCLS)", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:202312_Humpback_whale.svg"},
+    {"nom": "Basilic brun", "auteur": "Benjamint444", "licence": "GNU Free Documentation License 1.2", "source": "https://commons.wikimedia.org/wiki/File:Brown-basilisk-detail.jpg"},
+    {"nom": "Basilic vert", "auteur": "Hans Hillewaert", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Basiliscus_plumifrons_(Ca%C3%B1o_Negro).jpg"},
+    {"nom": "Boa constricteur", "auteur": "Arnaud Aury", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:Boa_constrictor_Gallion_Guyane.jpg"},
+    {"nom": "Bothrops asper", "auteur": "Photo by David J. Stang", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Bothrops_asper_3zz.jpg"},
+    {"nom": "Cacaoyer (avec cabosses)", "auteur": "Alma Mulalic and Yann Fauché", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Cacao_fruits_on_tree_-_Guadeloupe.JPG"},
+    {"nom": "Caiman a lunettes", "auteur": "Bernard Gagnon", "licence": "Creative Commons Zero, Public Domain Dedication", "source": "https://commons.wikimedia.org/wiki/File:Spectacled_caiman_in_Costa_Rica_02.jpg"},
+    {"nom": "Caracara a tete jaune", "auteur": "Charles J. Sharp", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Yellow-headed_caracara_(Milvago_chimachima_cordata)_Antioquia.jpg"},
+    {"nom": "Cassique de Montezuma", "auteur": "Aitor", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:Psarocolius_montezuma_387529536.jpg"},
+    {"nom": "Cécilie", "auteur": "Franco Andreone", "licence": "Creative Commons Attribution-Share Alike 2.5", "source": "https://commons.wikimedia.org/wiki/File:Dermophis_mexicanus.jpg"},
+    {"nom": "Ceiba (Fromager geant)", "auteur": "Alexandre", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Kapok_tree_Honolulu.jpg"},
+    {"nom": "Chauve-souris blanche", "auteur": "Geoff Gallice", "licence": "Creative Commons Attribution 2.0", "source": "https://commons.wikimedia.org/wiki/File:Ectophylla_alba_in_hand.jpg"},
+    {"nom": "Chloroceryle amazona", "auteur": "Gerry Zambonini", "licence": "Creative Commons Attribution-Share Alike 2.0", "source": "https://commons.wikimedia.org/wiki/File:Amazon_Kingfisher_(27012341489).jpg"},
+    {"nom": "Coati a nez blanc", "auteur": "Terry stone", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Coatimundi_2_t._stone.jpg"},
+    {"nom": "Colibri thalassin", "auteur": "Cephas", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Colibri_thalassinus_Santa_Elena_2.JPG"},
+    {"nom": "Crapaud geant", "auteur": "Wilfredor", "licence": "Creative Commons Zero, Public Domain Dedication", "source": "https://commons.wikimedia.org/wiki/File:Bufo_marinus_in_Venezuela.jpg"},
+    {"nom": "Crocodylus acutus", "auteur": "D. Gordon E. Robertson", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:American_Crocodile,_Costa_Rica.jpg"},
+    {"nom": "Dauphin tachete pantropical", "auteur": "Joseph Ferris III", "licence": "Creative Commons Attribution 2.0", "source": "https://commons.wikimedia.org/wiki/File:PanTropSpDolpor.jpg"},
+    {"nom": "Dendrobate fraise", "auteur": "Dendrotoine85", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Pumilio_010_800_cristobal_to.jpg"},
+    {"nom": "Dendrobate dore", "auteur": "Holger Krisp", "licence": "Creative Commons Attribution 3.0", "source": "https://commons.wikimedia.org/wiki/File:Dendrobates-auratus-goldbaumsteiger.jpg"},
+    {"nom": "Faux serpent corail", "auteur": "Otavio A Marques", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:Anilius_scytale_Porto_Nacional_TO_OAVM4.jpg"},
+    {"nom": "Figuier etrangleur", "auteur": "Vinayaraj", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Strangler_fig_at_Peravoor_2018_(6).jpg"},
+    {"nom": "Fleur Heliconia rostrata", "auteur": "Auteur inconnu", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Heliconia_rostrata1.jpg"},
+    {"nom": "Fleur Oiseau de paradis", "auteur": "PlumeEbene", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Une_fleur_de_paradis.jpg"},
+    {"nom": "Fourmi balle de fusil", "auteur": "Hans Hillewaert", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Paraponera_clavata.jpg"},
+    {"nom": "Fourmi coupe-feuille", "auteur": "Filo gèn'", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Leafcutter_ant_05.jpg"},
+    {"nom": "Fregate superbe", "auteur": "E. Kirdler", "licence": "Public domain", "source": "https://commons.wikimedia.org/wiki/File:Fregata_magnificens1.jpg"},
+    {"nom": "Gecko casque", "auteur": "Julien Renoult", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:Tarentola_chazaliae_12886671.jpg"},
+    {"nom": "Grand dauphin", "auteur": "NASA", "licence": "Public domain", "source": "https://commons.wikimedia.org/wiki/File:Tursiops_truncatus_01_(Cropped).jpg"},
+    {"nom": "Grand Hocco", "auteur": "Rob Foster", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:Crax_rubra_254070902.jpg"},
+    {"nom": "Grenouille de litiere", "auteur": "Brian Gratwicke", "licence": "Creative Commons Attribution 2.0", "source": "https://commons.wikimedia.org/wiki/File:Craugastor_bransfordii.jpg"},
+    {"nom": "Grenouille masquee", "auteur": "Lucas Vogel", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Craugastor_noblei.jpg"},
+    {"nom": "Heron tigre", "auteur": "....Christopher Borges....", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Tigrisoma_fasciatum_-_....Christopher_Borges...._-_377943834.jpeg"},
+    {"nom": "Iguane noir (Garrobo)", "auteur": "Ken Thomas", "licence": "Public domain", "source": "https://commons.wikimedia.org/wiki/File:Black_Spiny-tailed_Iguana-27527.jpg"},
+    {"nom": "Iguane vert", "auteur": "Cayambe", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Iguana_iguana_Portoviejo_04.jpg"},
+    {"nom": "Jacana noir", "auteur": "Geoff Gallice", "licence": "Creative Commons Attribution 2.0", "source": "https://commons.wikimedia.org/wiki/File:Acana_jacana_-near_Yarina_Lodge,_Napo_Province,_Ecuador_-adult-8_cropped.jpg"},
+    {"nom": "Jaguar", "auteur": "Giles Laurent", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:129_Jaguar_crossing_the_river_in_Encontro_das_%C3%81guas_State_Park_Photo_by_Giles_Laurent.jpg"},
+    {"nom": "Kinkajou", "auteur": "Kalamazoo Public Library", "licence": "No known copyright restrictions", "source": "https://commons.wikimedia.org/wiki/File:Potos_flavus_(22985770100).jpg"},
+    {"nom": "Lamantin des Caraibes", "auteur": "Galen Rathbun", "licence": "Public domain", "source": "https://commons.wikimedia.org/wiki/File:Manatee_with_calf.PD_-_colour_corrected.jpg"},
+    {"nom": "Manakin a col blanc", "auteur": "Francesco Veronesi", "licence": "Creative Commons Attribution-Share Alike 2.0", "source": "https://commons.wikimedia.org/wiki/File:White-collared_Manakin_-_Sarapiqui_-_Costa_Rica_MG_0596_(26585018422).jpg"},
+    {"nom": "Margay", "auteur": "Malene Thyssen", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Leopardus_wiedii.jpg"},
+    {"nom": "Martin-pecheur vert", "auteur": "Charles J. Sharp", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Green_kingfisher_(Chloroceryle_americana)_male_3.jpg"},
+    {"nom": "Mimosa pudica", "auteur": "Eric Hunt", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Mimosa_pudica_2.jpg"},
+    {"nom": "Morpho bleu", "auteur": "Traumrune", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Morpho_bleu_Stratford.jpg"},
+    {"nom": "Motmot a sourcils bleus", "auteur": "Charles J. Sharp", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Turquoise-browed_motmot_(Eumomota_superciliosa_apiaster)_Copan_2.jpg"},
+    {"nom": "Mygale a genoux rouges", "auteur": "André ALLIOT", "licence": "Creative Commons Zero, Public Domain Dedication", "source": "https://commons.wikimedia.org/wiki/File:Mygale_%C3%A0_genoux_rouges_(_Brachypelma_smithi_).jpg"},
+    {"nom": "Ocelot", "auteur": "Giles Laurent", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:016_Ocelot_in_Encontro_das_%C3%81guas_State_Park_Photo_by_Giles_Laurent.jpg"},
+    {"nom": "Orchidee Guaria Morada", "auteur": "Auteur inconnu", "licence": "Public domain", "source": "https://commons.wikimedia.org/wiki/File:Cattleya_skinneri0.jpg"},
+    {"nom": "Orque", "auteur": "DataBase Center for Life Science (DBCLS)", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:202402_Killer_whale.svg"},
+    {"nom": "Palmier marcheur", "auteur": "yakovlev.alexey", "licence": "Creative Commons Attribution-Share Alike 2.0", "source": "https://commons.wikimedia.org/wiki/File:Iriartea_deltoidea_and_Socratea_exorrhiza_(Arecaceae)_%E2%80%94_two_%22walking_palms%22_(30053641211).jpg"},
+    {"nom": "Papillon chouette", "auteur": "Didier Descouens", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Caligo_martia_(ventre).jpg"},
+    {"nom": "Papillon Heliconius", "auteur": "Viktorhauk", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Heliconius_melpomene_2011-06-19_4.jpg"},
+    {"nom": "Paresseux a gorge brune", "auteur": "Stefan Laube", "licence": "Public domain", "source": "https://commons.wikimedia.org/wiki/File:Bradypus.jpg"},
+    {"nom": "Paresseux d'Hoffmann", "auteur": "Leyo", "licence": "CC BY-SA 2.5 CH", "source": "https://commons.wikimedia.org/wiki/File:Two-toed_sloth_Costa_Rica.jpg"},
+    {"nom": "Pecari a collier", "auteur": "Chrumps", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Tayassu_tajacu.jpg"},
+    {"nom": "Pelican brun", "auteur": "Frank Schulenburg", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Juvenile_pelecanus_occidentalis_in_flight.jpg"},
+    {"nom": "Phasme", "auteur": "Gilles San Martin", "licence": "Creative Commons Attribution-Share Alike 2.0", "source": "https://commons.wikimedia.org/wiki/File:Phasmida_(5012291723).jpg"},
+    {"nom": "Phyllobate lugubre", "auteur": "desertnaturalist", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:Phyllobates_lugubris_172627741.jpg"},
+    {"nom": "Piaye ecureuil", "auteur": "Hobbyfotowiki", "licence": "Creative Commons Zero, Public Domain Dedication", "source": "https://commons.wikimedia.org/wiki/File:Piaya_cayana,_Costa_Rica.jpg"},
+    {"nom": "Poisson-ange francais", "auteur": "Jay Brasher", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:Pomacanthus_paru_341862163.jpg"},
+    {"nom": "Poisson-perroquet", "auteur": "Amada44", "licence": "Creative Commons Attribution 3.0", "source": "https://commons.wikimedia.org/wiki/File:Scarus_ghobban_0870.jpg"},
+    {"nom": "Puma", "auteur": "Luis Miguel Bugallo Sánchez (Lmbuga)", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Puma_concolor_stanleyana_-_Texas_Park_-_Lanzarote_-PC08.jpg"},
+    {"nom": "Quetzal resplendissant", "auteur": "Giles Laurent", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:057_Male_Resplendent_quetzal_in_Los_Quetzales_National_Park_Photo_by_Giles_Laurent.jpg"},
+    {"nom": "Raie manta", "auteur": "Rickard Zerpe", "licence": "Creative Commons Attribution 2.0", "source": "https://commons.wikimedia.org/wiki/File:Reef_manta_ray_(Manta_alfredi)_-_49877611173.jpg"},
+    {"nom": "Rainette aux yeux rouges", "auteur": "Careyjamesbalboa", "licence": "Public domain", "source": "https://commons.wikimedia.org/wiki/File:Red_eyed_tree_frog_edit2.jpg"},
+    {"nom": "Rainette de verre", "auteur": "Guayasamin JM, Cisneros-Heredia DF, Maynard RJ, Lynch RL, Culebras J, Hamilton PS", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Lateral_view_of_Hyalinobatrachium_pellucidum.jpg"},
+    {"nom": "Raton laveur", "auteur": "Rhododendrites", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Raccoon_in_Central_Park_(35264).jpg"},
+    {"nom": "Requin a pointes blanches", "auteur": "Kendall Clements", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:Carcharhinus_albimarginatus_hicks_reef.jpg"},
+    {"nom": "Requin-bouledogue", "auteur": "Jerome Paillet", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:Requin_bouledogue_(Carcharhinus_leucas)_(Ifremer_00813-92510_-_53588).jpg"},
+    {"nom": "Salamandre tropicale", "auteur": "Josiah H. Townsend", "licence": "Creative Commons Attribution-Share Alike 2.5", "source": "Nototriton lignicola.jpg"},
+    {"nom": "Scarabee rhinoceros", "auteur": "Derek Ramsey (Ram-Man)", "licence": "GNU Free Documentation License 1.2", "source": "https://commons.wikimedia.org/wiki/File:Elephant_Beetle_Megasoma_elephas_Male_Side_2699px.jpg"},
+    {"nom": "Serpent liane", "auteur": "Rushen", "licence": "Creative Commons Attribution-Share Alike 2.0", "source": "https://commons.wikimedia.org/wiki/File:Ahaetulla_prasina,_oriental_whipsnake_-_Kaeng_Krachan_National_Park.jpg"},
+    {"nom": "Singe capucin moine", "auteur": "David J. Stang", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Cebus_capucinus_8zz.jpg"},
+    {"nom": "Singe hurleur a manteau", "auteur": "Rhododendrites", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Mantled_howler_monkey_and_baby_(81337)2.jpg"},
+    {"nom": "Singe-araignee de Geoffroy", "auteur": "Steven G. Johnson", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Panama_spider_monkey,_Costa_Rica.JPG"},
+    {"nom": "Singe-ecureuil a dos rouge", "auteur": "cello caruso-turiello", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:Saimiri_oerstedii_411655504.jpg"},
+    {"nom": "Tamandua du Nord", "auteur": "Auteur inconnu", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:DirkvdM_tamandua.jpg"},
+    {"nom": "Tangara eveque", "auteur": "Charles J. Sharp", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Blue-grey_tanager_(Thraupis_episcopus_quaesita)_Las_Tangaras.jpg"},
+    {"nom": "Tapir de Baird", "auteur": "Rhododendrites", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Baird%27s_tapir_mother_with_baby_(92151).jpg"},
+    {"nom": "Tatou a neuf bandes", "auteur": "Hollingsworth, John and Karen", "licence": "Public domain", "source": "https://commons.wikimedia.org/wiki/File:Dasypus_novemcinctus.jpg"},
+    {"nom": "Tayra (Tolomuco)", "auteur": "Christoph Moning", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:Eira_barbara_60541018.jpg"},
+    {"nom": "Tortue imbriquee", "auteur": "Diego Delso", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Tortuga_carey_(Eretmochelys_imbricata),_parque_nacional_Ras_Muhammad,_Egipto,_2022-03-28,_DD_56.jpg"},
+    {"nom": "Tortue luth", "auteur": "Tortue_luth", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Tortuga_can%C3%A1_o_la%C3%BAd_(Dermochelys_coriacea).jpg"},
+    {"nom": "Tortue verte", "auteur": "Brocken Inaglory", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Hawaii_turtle_2.JPG"},
+    {"nom": "Toucan a carene", "auteur": "Anthony Batista", "licence": "Creative Commons Attribution 4.0", "source": "https://commons.wikimedia.org/wiki/File:Ramphastos_sulfuratus,_Cerro_Ancon_Reserve,_Panama_City_395958583.jpg"},
+    {"nom": "Toucan de Swainson", "auteur": "Charles J. Sharp", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Chestnut-mandibled_toucan.JPG"},
+    {"nom": "Toucanet emeraude", "auteur": "Félix Uribe", "licence": "Creative Commons Attribution-Share Alike 2.0", "source": "https://commons.wikimedia.org/wiki/File:Aulacorhynchus_albivitta,_Sabaneta,_Antioquia,_Colombia_(6741815127).jpg"},
+    {"nom": "Trogon massena", "auteur": "Dominic Sherony", "licence": "Creative Commons Attribution-Share Alike 2.0", "source": "https://commons.wikimedia.org/wiki/File:Slaty-tailed_Trogon_(Trogon_massena)_(7222810824).jpg"},
+    {"nom": "Urubu a tete rouge", "auteur": "Charles J. Sharp", "licence": "Creative Commons Attribution-Share Alike 4.0", "source": "https://commons.wikimedia.org/wiki/File:Turkey_vulture_(Cathartes_aura)_in_flight.JPG"},
+    {"nom": "Urubu noir", "auteur": "Mdf", "licence": "Creative Commons Attribution-Share Alike 3.0", "source": "https://commons.wikimedia.org/wiki/File:Coragyps-atratus-001.jpg"},
+    {"nom": "Vipere de Schlegel", "auteur": "Geoff Gallice", "licence": "Creative Commons Attribution 2.0", "source": "https://commons.wikimedia.org/wiki/File:Bothriechis_nigroadspersus_(La_Selva_Biological_Station).jpg"}
+]
+
+@router.get("/credits", response_class=HTMLResponse)
+def page_credits(request: Request):
+    session_id = request.cookies.get("session_faunabingo")
+    
+    # Adaptation du menu en haut (connecté vs visiteur)
+    if session_id:
+        header_links = """
+        <div class="flex space-x-2 items-center">
+            <a href="/mon-carnet" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">📖 Mon Carnet</a>
+            <a href="/profil" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">👤 Profil</a>
+        </div>
+        """
+    else:
+        header_links = """
+        <div class="flex space-x-2 items-center">
+            <a href="/connexion" class="text-[10px] sm:text-xs bg-lime-800 hover:bg-lime-900 px-2 sm:px-3 py-1.5 rounded-lg transition font-medium shadow-sm">Se connecter</a>
+        </div>
+        """
+
+    # Génération dynamique des blocs HTML pour chaque image
+    blocs_credits_html = ""
+    for item in CREDITS_IMAGES:
+        nom_propre = item['nom'].replace('_', ' ').capitalize()
+        blocs_credits_html += f"""
+        <div class="p-4 bg-stone-50 rounded-lg border border-stone-100 flex flex-col justify-between">
+            <div>
+                <h2 class="font-bold text-stone-800 text-base">{nom_propre}</h2>
+                <p class="mt-1 text-sm">Photo par <em>{item['auteur']}</em>, via <a href="{item['source']}" target="_blank" rel="noopener noreferrer" class="text-lime-700 hover:underline">Wikimedia Commons</a>.</p>
+            </div>
+            <p class="text-[10px] text-stone-400 mt-2 font-mono">Licence : {item['licence']}</p>
+        </div>
+        """
+
+    # Contenu final avec la grille (grid) pour un bel affichage
+    contenu = f"""
+    <div class="bg-white p-6 md:p-10 rounded-2xl shadow-sm border border-stone-200 mb-8 max-w-4xl mx-auto mt-4">
+        <h1 class="text-3xl font-black text-stone-800 mb-6">Crédits photographiques</h1>
+        
+        <p class="text-stone-600 mb-8 text-sm md:text-base leading-relaxed">
+            FaunaBingo utilise des images issues de sources libres de droits et collaboratives. 
+            Un grand merci aux photographes du monde entier qui partagent leur travail et leur passion pour la nature.
+        </p>
+
+        <!-- Grille responsive : 1 colonne sur mobile, 2 colonnes sur tablette/PC -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {blocs_credits_html}
+        </div>
+    </div>
+    """
+    
+    return HTMLResponse(content=layout_jeu("Crédits - FaunaBingo", contenu, header_links))
